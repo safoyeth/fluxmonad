@@ -3,6 +3,7 @@ from typing import Any, Callable, Iterator
 
 from typing import Any, Callable, Iterator, Sequence, Union
 from fluxmonad.accessors import project_exclude, project_select
+from fluxmonad.accessors.resolver import MISSING, get_value
 from fluxmonad.expressions.base import Expression
 from fluxmonad.expressions.parser import LambdaExpression
 
@@ -157,3 +158,62 @@ class SkipNode(Node):
 
     def explain_step(self) -> str:
         return f"SKIP: {self.count}"
+
+class ExtendNode(Node):
+    """
+    Стриминговое добавление/обогащение элементов новым полем.
+    Возвращает копию словаря или объекта с добавленным полем.
+    """
+
+    def __init__(self, parent: Node, field_name: str, rule: Any) -> None:
+        super().__init__(parent=parent)
+        self.field_name = field_name
+        self.rule = rule
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def _compute_value(self, item: Any) -> Any:
+        if callable(self.rule):
+            return self.rule(item)
+
+        if isinstance(self.rule, (list, tuple)):
+            parts = []
+            for part in self.rule:
+                if isinstance(part, str):
+                    # Если строка не является потенциальным путем (содержит пробелы и т.п.),
+                    # используем её сразу как литерал
+                    if " " in part or not part.strip():
+                        parts.append(part)
+                        continue
+
+                    try:
+                        val = get_value(item, part, default=MISSING)
+                        parts.append(str(val) if val is not MISSING else part)
+                    except ValueError:
+                        # Если путь невалиден с точки зрения синтаксиса — берем как строковый литерал
+                        parts.append(part)
+                else:
+                    parts.append(str(part))
+            return "".join(parts)
+
+        return self.rule
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            computed = self._compute_value(item)
+            if isinstance(item, dict):
+                new_item = dict(item)
+                new_item[self.field_name] = computed
+                yield new_item
+            else:
+                # Если передан пользовательский объект — обогащаем его поверхностную копию
+                import copy
+                new_obj = copy.copy(item)
+                setattr(new_obj, self.field_name, computed)
+                yield new_obj
+
+    def explain_step(self) -> str:
+        return f"EXTEND: {self.field_name}"

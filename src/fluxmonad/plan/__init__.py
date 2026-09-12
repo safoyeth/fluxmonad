@@ -9,6 +9,7 @@ from fluxmonad.plan.transforms import (
     SelectNode,
     SkipNode,
     TakeNode,
+    ExtendNode
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "GroupByNode",
     "SortNode",
     "DistinctNode",
+    "ExtendNode"
 ]

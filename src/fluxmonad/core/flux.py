@@ -20,7 +20,9 @@ from fluxmonad.plan.transforms import (
     SelectNode,
     SkipNode,
     TakeNode,
+    ExtendNode
 )
+from fluxmonad.core.types import alias_for
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -257,6 +259,15 @@ class Flux(Generic[T]):
         cached_data = tuple(self)
         return Flux[T](cached_data)
 
+    # --  Добавление полей к элементам потока (ExtendNode)  ---
+
+    def extend(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
+        """
+        Добавляет вычисляемое поле в поток.
+        rule может быть callable, списком компонентов для склейки или константой.
+        """
+        return Flux[Dict[str, Any]](ExtendNode(self._node, field_name, rule))
+
     # --- Фабричные методы создания (Data Ingestion) ---
 
     @classmethod
@@ -330,3 +341,140 @@ class Flux(Generic[T]):
             return cls.from_excel(p)
         else:
             raise ValueError(f"Неподдерживаемый формат файла: {ext}")
+
+    # --- Алиасы для when / filterby / where ---
+
+    @alias_for(when)
+    def where(self, predicate: Union[None, Callable[[T], bool], Expression] = None, **kwargs: Any) -> Flux[T]:
+        return self.when(predicate, **kwargs)
+
+    @alias_for(when)
+    def filter_by(self, predicate: Union[None, Callable[[T], bool], Expression] = None, **kwargs: Any) -> Flux[T]:
+        return self.when(predicate, **kwargs)
+
+    @alias_for(when)
+    def filterBy(self, predicate: Union[None, Callable[[T], bool], Expression] = None, **kwargs: Any) -> Flux[T]:
+        return self.when(predicate, **kwargs)
+
+    # --- Алиасы для select / exclude ---
+
+    @alias_for(select)
+    def project(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
+        return self.select(*fields)
+
+    @alias_for(exclude)
+    def drop(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
+        return self.exclude(*fields)
+
+    # --- Алиасы для sortby ---
+
+    @alias_for(sortby)
+    def sort_by(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
+        return self.sortby(*keys, reverse=reverse)
+
+    @alias_for(sortby)
+    def sortBy(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
+        return self.sortby(*keys, reverse=reverse)
+
+    @alias_for(sortby)
+    def order_by(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
+        return self.sortby(*keys, reverse=reverse)
+
+    @alias_for(sortby)
+    def orderBy(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
+        return self.sortby(*keys, reverse=reverse)
+
+    # --- Алиасы для extend ---
+
+    @alias_for(extend)
+    def with_field(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
+        return self.extend(field_name, rule)
+
+    @alias_for(extend)
+    def withField(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
+        return self.extend(field_name, rule)
+
+    # --- Алиасы для groupby ---
+
+    @alias_for(groupby)
+    def group_by(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
+        return self.groupby(key_selector)
+
+    @alias_for(groupby)
+    def groupBy(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
+        return self.groupby(key_selector)
+
+    # --- Алиасы для distinct ---
+
+    @alias_for(distinct)
+    def unique(self, key_selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Flux[T]:
+        return self.distinct(key_selector)
+
+    # --- Алиасы для срезов: take / skip ---
+
+    @alias_for(take)
+    def limit(self, count: int) -> Flux[T]:
+        return self.take(count)
+
+    @alias_for(skip)
+    def offset(self, count: int) -> Flux[T]:
+        return self.skip(count)
+
+    # --- Алиасы для flat_map / bind ---
+
+    @alias_for(bind)
+    def flat_map(self, func: Callable[[T], Iterable[R]]) -> Flux[R]:
+        return self.bind(func)
+
+    @alias_for(bind)
+    def flatMap(self, func: Callable[[T], Iterable[R]]) -> Flux[R]:
+        return self.bind(func)
+
+    # --- Алиасы для терминальных операций ---
+
+    @alias_for(collect)
+    def to_list(self) -> List[T]:
+        return self.collect()
+
+    @alias_for(collect)
+    def toList(self) -> List[T]:
+        return self.collect()
+
+    @alias_for(average)
+    def avg(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
+        return self.average(selector)
+
+    @classmethod
+    @alias_for(from_json)
+    def fromJson(cls, path_or_str: Union[str, Any], lines: bool = False, encoding: str = "utf-8") -> Flux[Any]:
+        return cls.from_json(path_or_str, lines=lines, encoding=encoding)
+
+    @classmethod
+    @alias_for(from_csv)
+    def fromCsv(cls, filepath: Union[str, Any], encoding: str = "utf-8", delimiter: str = ",") -> Flux[Dict[str, Any]]:
+        return cls.from_csv(filepath, encoding=encoding, delimiter=delimiter)
+
+    @classmethod
+    @alias_for(from_yaml)
+    def fromYaml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
+        return cls.from_yaml(path_or_str, encoding=encoding)
+
+    @classmethod
+    @alias_for(from_toml)
+    def fromToml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
+        return cls.from_toml(path_or_str, encoding=encoding)
+
+    @classmethod
+    @alias_for(from_pandas)
+    def fromPandas(cls, df: Any) -> Flux[Dict[str, Any]]:
+        return cls.from_pandas(df)
+
+    @classmethod
+    @alias_for(from_excel)
+    def fromExcel(cls, filepath: Union[str, Any], sheet_name: Union[str, int] = 0) -> Flux[Dict[str, Any]]:
+        return cls.from_excel(filepath, sheet_name=sheet_name)
+
+    @classmethod
+    @alias_for(from_file)
+    def fromFile(cls, filepath: Union[str, Any]) -> Flux[Any]:
+        return cls.from_file(filepath)
