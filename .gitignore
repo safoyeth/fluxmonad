@@ -22,6 +22,7 @@ ENV/
 # Cache & temporary files
 *.pyc
 .pytest_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 

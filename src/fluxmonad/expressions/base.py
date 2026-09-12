@@ -3,17 +3,14 @@ from typing import Any
 
 
 class Expression(ABC):
-    """Базовое предикатное выражение."""
-
     @abstractmethod
-    def evaluate(self, obj: Any) -> bool:
-        """Вычисляет выражение для переданного объекта."""
+    def evaluate(self, item: Any) -> bool:
         pass
 
-    @abstractmethod
-    def explain(self) -> str:
-        """Возвращает читаемое строковое представление для плана выполнения."""
-        pass
+    @property
+    def referenced_fields(self) -> set[str]:
+        """Множество полей, которые требуются для вычисления выражения."""
+        return set()
 
     def __and__(self, other: "Expression") -> "Expression":
         from fluxmonad.expressions.logical import And
@@ -28,11 +25,14 @@ class Expression(ABC):
         return Not(self)
 
     def and_(self, other: "Expression") -> "Expression":
-        """Логическое И (словесный метод)."""
         from fluxmonad.expressions.logical import And
         return And(self, other)
 
     def or_(self, other: "Expression") -> "Expression":
-        """Логическое ИЛИ (словесный метод)."""
         from fluxmonad.expressions.logical import Or
         return Or(self, other)
+
+    @abstractmethod
+    def explain(self) -> str:
+        """Строковое представление выражения для плана исполнения."""
+        pass

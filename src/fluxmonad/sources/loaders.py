@@ -1,7 +1,8 @@
 import csv
 import json
+import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, Optional, Union
+from typing import Any, Callable, Dict, Iterator, Optional, Union, cast
 
 
 def read_json_source(
@@ -75,19 +76,19 @@ def read_yaml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> 
 
 def read_toml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> Dict[str, Any]:
     """Читает TOML-источник (через tomllib из Python 3.11+ или tomli)."""
-    try:
-        import tomllib  # Python 3.11+
-    except ImportError:
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
         try:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib
         except ImportError:
             raise ImportError("Для чтения TOML в Python < 3.11 требуется tomli: pip install tomli")
 
     target = Path(path_or_str) if isinstance(path_or_str, (str, Path)) and Path(path_or_str).is_file() else None
     if target:
         with open(target, mode="rb") as f:
-            return tomllib.load(f)
-    return tomllib.loads(str(path_or_str))
+            return cast(Dict[str, Any], tomllib.load(f))
+    return cast(Dict[str, Any], tomllib.loads(str(path_or_str)))
 
 
 def read_pandas_source(df: Any) -> Iterator[Dict[str, Any]]:

@@ -1,5 +1,5 @@
 import inspect
-from typing import Any, AsyncIterable, Iterable, Iterator
+from typing import Any, AsyncIterable, AsyncIterator, Iterable, Iterator
 from fluxmonad.plan.node import Node
 
 
@@ -24,7 +24,7 @@ class SourceNode(Node):
             return iter(self.source)
         return iter([self.source])
 
-    async def evaluate_async(self):
+    async def evaluate_async(self) -> AsyncIterator[Any]:
         if hasattr(self.source, "__aiter__"):
             async for item in self.source:
                 yield item

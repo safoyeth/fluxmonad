@@ -17,16 +17,20 @@ OPERATORS: Dict[str, Type[Expression]] = {
 
 
 class LambdaExpression(Expression):
-    """Обёртка над обычной Python callable-функцией для единообразия в дереве выражений."""
+    def __init__(self, func: Callable[[Any], bool]) -> None:
+        self.func = func
 
-    def __init__(self, predicate: Callable[[Any], bool]) -> None:
-        self.predicate = predicate
-
-    def evaluate(self, obj: Any) -> bool:
-        return bool(self.predicate(obj))
+    def evaluate(self, item: Any) -> bool:
+        return bool(self.func(item))
 
     def explain(self) -> str:
-        return getattr(self.predicate, "__name__", str(self.predicate))
+        name = getattr(self.func, "__name__", "<lambda>")
+        return f"LAMBDA: {name}"
+
+    @property
+    def referenced_fields(self) -> set[str]:
+        # Для скалярных функций над целым элементом зависимости от конкретных ключей словаря нет
+        return set()
 
 class Q:
     """

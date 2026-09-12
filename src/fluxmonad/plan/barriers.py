@@ -53,7 +53,7 @@ class _ComparableWrapper:
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, _ComparableWrapper):
             return False
-        return self.value == other.value
+        return bool(self.value == other.value)
 
 
 class SortNode(Node):
@@ -189,7 +189,7 @@ class GroupByNode(Node):
             return get_value(item, self.key_selector, default=None)
         raise TypeError(f"Селектор ключа должен быть строкой или callable: {type(self.key_selector)}")
 
-    def evaluate(self) -> Iterator[Group]:
+    def evaluate(self) -> Iterator[Group[Any]]:
         assert self.parent is not None
         groups: DefaultDict[Any, List[Any]] = collections.defaultdict(list)
 

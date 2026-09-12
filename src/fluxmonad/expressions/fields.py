@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Set
 from fluxmonad.accessors import MISSING, get_value
 from fluxmonad.expressions.base import Expression
 
@@ -11,6 +11,25 @@ class BinaryOp(Expression):
         self.value = value
         self.op_name = op_name
 
+    @property
+    def referenced_fields(self) -> Set[str]:
+        fields: Set[str] = set()
+        if isinstance(self.field_path, str):
+            fields.add(self.field_path.split(".")[0].strip())
+        elif hasattr(self.field_path, "path"):
+            fields.add(str(self.field_path.path).split(".")[0].strip())
+
+        if hasattr(self.value, "referenced_fields"):
+            try:
+                rf = self.value.referenced_fields
+                if rf:
+                    fields.update(rf)
+            except Exception:
+                pass
+        elif hasattr(self.value, "path") and not isinstance(self.value, (str, bytes)):
+            fields.add(str(self.value.path).split(".")[0].strip())
+        return fields
+
     def explain(self) -> str:
         return f"{self.field_path} {self.op_name} {repr(self.value)}"
 
@@ -21,7 +40,7 @@ class Eq(BinaryOp):
 
     def evaluate(self, obj: Any) -> bool:
         val = get_value(obj, self.field_path, default=MISSING)
-        return False if val is MISSING else val == self.value
+        return False if val is MISSING else bool(val == self.value)
 
 
 class Ne(BinaryOp):
@@ -30,7 +49,7 @@ class Ne(BinaryOp):
 
     def evaluate(self, obj: Any) -> bool:
         val = get_value(obj, self.field_path, default=MISSING)
-        return False if val is MISSING else val != self.value
+        return False if val is MISSING else bool(val != self.value)
 
 
 class Gt(BinaryOp):
@@ -42,7 +61,7 @@ class Gt(BinaryOp):
         if val is MISSING or val is None:
             return False
         try:
-            return val > self.value
+            return bool(val > self.value)
         except TypeError:
             return False
 
@@ -56,7 +75,7 @@ class Gte(BinaryOp):
         if val is MISSING or val is None:
             return False
         try:
-            return val >= self.value
+            return bool(val >= self.value)
         except TypeError:
             return False
 
@@ -70,7 +89,7 @@ class Lt(BinaryOp):
         if val is MISSING or val is None:
             return False
         try:
-            return val < self.value
+            return bool(val < self.value)
         except TypeError:
             return False
 
@@ -84,7 +103,7 @@ class Lte(BinaryOp):
         if val is MISSING or val is None:
             return False
         try:
-            return val <= self.value
+            return bool(val <= self.value)
         except TypeError:
             return False
 
@@ -98,7 +117,7 @@ class In(BinaryOp):
         if val is MISSING:
             return False
         try:
-            return val in self.value
+            return bool(val in self.value)
         except TypeError:
             return False
 
@@ -112,7 +131,7 @@ class Contains(BinaryOp):
         if val is MISSING or val is None:
             return False
         try:
-            return self.value in val
+            return bool(self.value in val)
         except TypeError:
             return False
 
@@ -122,6 +141,10 @@ class Field:
 
     def __init__(self, path: str) -> None:
         self.path = path
+
+    @property
+    def referenced_fields(self) -> Set[str]:
+        return {self.path.split(".")[0].strip()}
 
     def __eq__(self, other: Any) -> Eq:  # type: ignore[override]
         return Eq(self.path, other)

@@ -1,48 +1,58 @@
 from typing import Any, List
 from fluxmonad.expressions.base import Expression
 
-
 class And(Expression):
     def __init__(self, *expressions: Expression) -> None:
-        self.expressions: List[Expression] = []
-        for expr in expressions:
-            if isinstance(expr, And):
-                self.expressions.extend(expr.expressions)
-            else:
-                self.expressions.append(expr)
+        self.expressions = list(expressions)
 
-    def evaluate(self, obj: Any) -> bool:
-        return all(expr.evaluate(obj) for expr in self.expressions)
+    @property
+    def referenced_fields(self) -> set[str]:
+        res: set[str] = set()
+        for expr in self.expressions:
+            res.update(expr.referenced_fields)
+        return res
+
+    def evaluate(self, item: Any) -> bool:
+        return all(expr.evaluate(item) for expr in self.expressions)
 
     def explain(self) -> str:
-        return f"({' AND '.join(e.explain() for e in self.expressions)})"
+        inner = " AND ".join(e.explain() if hasattr(e, "explain") else str(e) for e in self.expressions)
+        return f"({inner})"
 
 
 class Or(Expression):
     def __init__(self, *expressions: Expression) -> None:
-        self.expressions: List[Expression] = []
-        for expr in expressions:
-            if isinstance(expr, Or):
-                self.expressions.extend(expr.expressions)
-            else:
-                self.expressions.append(expr)
+        self.expressions = list(expressions)
 
-    def evaluate(self, obj: Any) -> bool:
-        return any(expr.evaluate(obj) for expr in self.expressions)
+    @property
+    def referenced_fields(self) -> set[str]:
+        res: set[str] = set()
+        for expr in self.expressions:
+            res.update(expr.referenced_fields)
+        return res
+
+    def evaluate(self, item: Any) -> bool:
+        return any(expr.evaluate(item) for expr in self.expressions)
 
     def explain(self) -> str:
-        return f"({' OR '.join(e.explain() for e in self.expressions)})"
+        inner = " OR ".join(e.explain() if hasattr(e, "explain") else str(e) for e in self.expressions)
+        return f"({inner})"
 
 
 class Not(Expression):
     def __init__(self, expression: Expression) -> None:
         self.expression = expression
 
-    def evaluate(self, obj: Any) -> bool:
-        return not self.expression.evaluate(obj)
+    @property
+    def referenced_fields(self) -> set[str]:
+        return self.expression.referenced_fields
+
+    def evaluate(self, item: Any) -> bool:
+        return not self.expression.evaluate(item)
 
     def explain(self) -> str:
-        return f"NOT ({self.expression.explain()})"
+        inner = self.expression.explain() if hasattr(self.expression, "explain") else str(self.expression)
+        return f"NOT({inner})"
 
 def and_(*expressions: Expression) -> Expression:
     """Объединяет выражения через логическое И: and_(expr1, expr2)."""

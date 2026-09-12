@@ -174,6 +174,10 @@ class ExtendNode(Node):
     def is_barrier(self) -> bool:
         return False
 
+    @property
+    def target_field(self) -> str:
+        return self.field_name
+
     def _compute_value(self, item: Any) -> Any:
         if callable(self.rule):
             return self.rule(item)

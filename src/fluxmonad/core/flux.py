@@ -4,7 +4,7 @@ import collections
 import functools
 import statistics
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union, Type
+from typing import Any, AsyncIterator, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union, Type, cast
 
 from fluxmonad.accessors import get_value
 from fluxmonad.expressions.base import Expression
@@ -231,8 +231,8 @@ class Flux(Generic[T]):
         """
         Барьерная группировка элементов.
         Возвращает Flux[Group], элементы которого содержат .key и .flux (подпоток элементов).
-        """
-        return Flux[Group[T]](GroupByNode(self._node, key_selector))
+        """  
+        return Flux(GroupByNode(self._node, key_selector))
 
     # --- Устранение дубликатов ---
 
@@ -251,7 +251,7 @@ class Flux(Generic[T]):
         for item in self:
             val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
             if val is not None:
-                total += val
+                total += cast(Union[int, float], val)
         return total
 
     def average(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
@@ -261,7 +261,7 @@ class Flux(Generic[T]):
         for item in self:
             val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
             if val is not None:
-                total += val
+                total += cast(Union[int, float], val)
                 count += 1
         if count == 0:
             raise ValueError("Невозможно вычислить average для пустого потока")
@@ -270,7 +270,7 @@ class Flux(Generic[T]):
     def min(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
         """Находит минимальный элемент."""
         if selector is None:
-            return min(self)
+            return min(self, key=lambda x: cast(Any, x))
         if callable(selector):
             return min(self, key=selector)
         return min(self, key=lambda x: get_value(x, selector))
@@ -278,7 +278,7 @@ class Flux(Generic[T]):
     def max(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
         """Находит максимальный элемент."""
         if selector is None:
-            return max(self)
+            return max(self, key=lambda x: cast(Any, x))
         if callable(selector):
             return max(self, key=selector)
         return max(self, key=lambda x: get_value(x, selector))
@@ -445,7 +445,7 @@ class Flux(Generic[T]):
     ) -> Flux[Any]:
         """Создает Flux из JSON-файла, строки или JSON Lines."""
         from fluxmonad.sources.loaders import read_json_source
-        return cls(read_json_source(path_or_str, lines=lines, encoding=encoding))
+        return Flux[Any](read_json_source(path_or_str, lines=lines, encoding=encoding))
 
     @classmethod
     def from_csv(
@@ -456,13 +456,13 @@ class Flux(Generic[T]):
     ) -> Flux[Dict[str, Any]]:
         """Лениво читает CSV файл построчно в виде словарей."""
         from fluxmonad.sources.loaders import read_csv_source
-        return cls(read_csv_source(filepath, encoding=encoding, delimiter=delimiter))
+        return Flux[Dict[str, Any]](read_csv_source(filepath, encoding=encoding, delimiter=delimiter))
 
     @classmethod
     def from_yaml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
         """Создает Flux из YAML-файла или строки."""
         from fluxmonad.sources.loaders import read_yaml_source
-        return cls(read_yaml_source(path_or_str, encoding=encoding))
+        return Flux[Any](read_yaml_source(path_or_str, encoding=encoding))
 
     @classmethod
     def from_toml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
@@ -471,14 +471,14 @@ class Flux(Generic[T]):
         data = read_toml_source(path_or_str, encoding=encoding)
         # Если TOML содержит корневой список или словарь
         if isinstance(data, list):
-            return cls(data)
-        return cls([data])
+            return Flux[Any](data)
+        return Flux[Any]([data])
 
     @classmethod
     def from_pandas(cls, df: Any) -> Flux[Dict[str, Any]]:
         """Преобразует pandas.DataFrame в поток Flux словарей."""
         from fluxmonad.sources.loaders import read_pandas_source
-        return cls(read_pandas_source(df))
+        return Flux[Dict[str, Any]](read_pandas_source(df))
 
     @classmethod
     def from_excel(
@@ -488,7 +488,7 @@ class Flux(Generic[T]):
     ) -> Flux[Dict[str, Any]]:
         """Читает лист Excel (.xlsx) построчно в виде словарей."""
         from fluxmonad.sources.loaders import read_excel_source
-        return cls(read_excel_source(filepath, sheet_name=sheet_name))
+        return Flux[Dict[str, Any]](read_excel_source(filepath, sheet_name=sheet_name))
 
     @classmethod
     def from_file(cls, filepath: Union[str, Any]) -> Flux[Any]:
@@ -676,7 +676,7 @@ class Flux(Generic[T]):
 
     def zip(self, other: Flux[R]) -> Flux[Tuple[T, R]]:
         """Потоково объединяет элементы текущего Flux с элементами другого Flux в кортежи."""
-        return Flux[Tuple[T, R]](ZipNode(self._node, other._node))
+        return Flux(ZipNode(self._node, other._node))
 
     # --- Разделение потока ---
 
@@ -699,7 +699,7 @@ class Flux(Generic[T]):
 
     def chunk(self, size: int) -> Flux[List[T]]:
         """Разбивает поток на непересекающиеся списки размера size."""
-        return Flux[List[T]](ChunkNode(self._node, size))
+        return Flux(ChunkNode(self._node, size))
 
     @alias_for(chunk)
     def batch(self, size: int) -> Flux[List[T]]:
@@ -707,7 +707,7 @@ class Flux(Generic[T]):
 
     def window(self, size: int, step: int = 1) -> Flux[List[T]]:
         """Формирует скользящее окно размера size с шагом step."""
-        return Flux[List[T]](WindowNode(self._node, size, step))
+        return Flux(WindowNode(self._node, size, step))
 
     # --- Приведение типов ---
 
@@ -866,8 +866,8 @@ class Flux(Generic[T]):
 
     def median(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
         """Вычисляет медиану потока."""
-        vals = [
-            get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+        vals: List[float] = [
+            float(get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else cast(Any, item)))
             for item in self
         ]
         if not vals:
@@ -886,8 +886,8 @@ class Flux(Generic[T]):
 
     def std_dev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
         """Вычисляет выборочное стандартное отклонение."""
-        vals = [
-            get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+        vals: List[float] = [
+            float(get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else cast(Any, item)))
             for item in self
         ]
         if len(vals) < 2:
@@ -967,7 +967,7 @@ class Flux(Generic[T]):
 
     # --- Async Support ---
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncIterator[T]:
         """Асинхронный генератор для обхода пайплайна через async for."""
         for item in self:
             yield item

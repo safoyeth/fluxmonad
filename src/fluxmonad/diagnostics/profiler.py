@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 from fluxmonad.plan.node import Node
 
 
@@ -44,7 +44,8 @@ def profile_pipeline(node: Node) -> ProfileResult:
     metrics: List[StepMetric] = []
     overall_start = time.perf_counter()
 
-    current_data: Iterator[Any] = iter([])
+    current_data: Iterable[Any] = []
+    materialized: List[Any] = []
 
     for step_node in nodes:
         step_start = time.perf_counter()
