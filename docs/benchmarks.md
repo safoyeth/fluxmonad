@@ -1,5 +1,7 @@
 # FluxMonad Performance Benchmarks
 
+**[English](benchmarks.md)** | **[Русский](benchmarks_ru.md)**
+
 This document reports performance benchmarks measured on **1,000,000 stream records** comparing FluxMonad against native Python generator pipelines (`itertools`).
 
 Benchmark script: [`benchmarks/benchmarks.py`](file:///home/safoyeth/Документы/fluxmonad/benchmarks/benchmarks.py)  

@@ -1,5 +1,7 @@
 # FluxMonad API Reference
 
+**[English](api_reference.md)** | **[Русский](api_reference_ru.md)**
+
 A comprehensive technical reference for the public classes, methods, and expressions in `fluxmonad`.
 
 ---

@@ -1,5 +1,7 @@
 # FluxMonad Architecture & Internal Mechanics
 
+**[English](architecture.md)** | **[Русский](architecture_ru.md)**
+
 FluxMonad is a high-performance, lazy stream processing library designed for Python 3.10+. It combines the formal guarantees of functional monads, the ergonomics of declarative query builders (Django/LINQ style), and the performance of an execution graph rule-based optimizer (RBO).
 
 ---

@@ -1,5 +1,7 @@
 # Execution Plan Optimization & Predicate Pushdown
 
+**[English](optimization.md)** | **[Русский](optimization_ru.md)**
+
 FluxMonad features an integrated **Rule-Based Optimizer (RBO)** implemented in `PlanOptimizer`. The optimizer analyzes the pipeline's execution graph and applies algebraic transformations before any data is pulled from the source.
 
 ---
