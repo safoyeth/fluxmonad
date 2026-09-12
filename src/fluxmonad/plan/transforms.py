@@ -137,3 +137,23 @@ class BindNode(Node):
 
     def explain_step(self) -> str:
         return f"BIND: {getattr(self.func, '__name__', str(self.func))}"
+
+class SkipNode(Node):
+    """Стриминговый пропуск первых n элементов."""
+
+    def __init__(self, parent: Node, count: int) -> None:
+        super().__init__(parent=parent)
+        if count < 0:
+            raise ValueError("Параметр count не может быть отрицательным")
+        self.count = count
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        return itertools.islice(self.parent.evaluate(), self.count, None)
+
+    def explain_step(self) -> str:
+        return f"SKIP: {self.count}"
