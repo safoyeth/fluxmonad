@@ -35,7 +35,7 @@
 | **Full Stream Reduction** <br> `Sum по 1 000 000 строк` | 2.7208 с | 2.8061 с | 0.00 МБ vs 0.01 МБ | $O(1)$ потребление памяти |
 
 ---
-
+<!--
 ## 📦 Установка
 
 ```bash
@@ -47,7 +47,7 @@ pip install fluxmonad
 ```bash
 pip install "fluxmonad[all]"
 ```
-
+-->
 ---
 
 ## ⚡ Быстрый старт
