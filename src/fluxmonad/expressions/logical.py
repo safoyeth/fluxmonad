@@ -61,15 +61,15 @@ class Not(Expression):
         return f"NOT({inner})"
 
 def and_(*expressions: Expression) -> Expression:
-    """Объединяет выражения через логическое И: and_(expr1, expr2)."""
+    """Combines expressions using logical AND: and_(expr1, expr2)."""
     return And(*expressions)
 
 
 def or_(*expressions: Expression) -> Expression:
-    """Объединяет выражения через логическое ИЛИ: or_(expr1, expr2)."""
+    """Combines expressions using logical OR: or_(expr1, expr2)."""
     return Or(*expressions)
 
 
 def not_(expression: Expression) -> Expression:
-    """Инвертирует выражение: not_(expr)."""
+    """Inverts an expression: not_(expr)."""
     return Not(expression)

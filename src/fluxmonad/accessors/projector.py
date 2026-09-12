@@ -6,13 +6,13 @@ from fluxmonad.accessors.resolver import MISSING, get_value
 
 def project_select(obj: Any, fields: Sequence[str]) -> Dict[str, Any]:
     """
-    Проецирует объект, оставляя только указанные поля.
-    Поля сохраняются в виде словаря {field: value}.
+    Projects an object, retaining only the specified fields.
+    Fields are returned as a dictionary of {field: value}.
     """
     result: Dict[str, Any] = {}
     for field in fields:
         val = get_value(obj, field, default=None)
-        # Имя ключа в результирующем словаре — последнее имя пути или исходное
+        # The key name in the resulting dict is the last path segment or original name
         key = field.split(".")[-1] if "." in field else field
         result[key] = val
     return result
@@ -20,9 +20,9 @@ def project_select(obj: Any, fields: Sequence[str]) -> Dict[str, Any]:
 
 def project_exclude(obj: Any, fields: Iterable[str]) -> Dict[str, Any]:
     """
-    Исключает указанные поля из объекта.
-    Если объект — Mapping, возвращает копию словаря без исключённых ключей.
-    Если объект — класс с __dict__, возвращает словарь его атрибутов без исключённых ключей.
+    Excludes specified fields from an object.
+    If the object is a Mapping, returns a copy of the dictionary without excluded keys.
+    If the object has __dict__, returns a dictionary of its attributes without excluded keys.
     """
     fields_set = set(fields)
 

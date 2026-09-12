@@ -63,13 +63,13 @@ class Flux(Generic[T]):
 
     def __iter__(self) -> Iterator[T]:
         """
-        Ленивая итерация по результатам пайплайна.
-        Перед выполнением граф автоматически оптимизируется.
+        Lazy iteration through pipeline results.
+        The execution plan graph is automatically optimized prior to execution.
         """
         optimized_node = PlanOptimizer.optimize(self._node)
         return iter(optimized_node.evaluate())
 
-    # --- Функциональный API ---
+    # --- Functional API ---
 
     def map(self, func: Callable[[T], R]) -> Flux[R]:
         return Flux[R](MapNode(self._node, func))
@@ -83,7 +83,7 @@ class Flux(Generic[T]):
     def __rshift__(self, func: Callable[[T], Iterable[R]]) -> Flux[R]:
         return self.bind(func)
 
-    # --- DSL Фильтрации ---
+    # --- Filtering DSL ---
 
     def when(
         self,
@@ -100,7 +100,7 @@ class Flux(Generic[T]):
     ) -> Flux[T]:
         return self.when(predicate, **kwargs)
 
-    # --- DSL Проекции ---
+    # --- Projection DSL ---
 
     def select(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
         flattened_fields: List[str] = []
@@ -110,7 +110,7 @@ class Flux(Generic[T]):
             elif isinstance(field, str):
                 flattened_fields.append(field)
             else:
-                raise TypeError(f"Поле должно быть строкой или последовательностью строк: {field}")
+                raise TypeError(f"Field must be a string or sequence of strings: {field}")
         return Flux[Dict[str, Any]](SelectNode(self._node, flattened_fields))
 
     def exclude(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
@@ -121,10 +121,10 @@ class Flux(Generic[T]):
             elif isinstance(field, str):
                 flattened_fields.append(field)
             else:
-                raise TypeError(f"Поле должно быть строкой или последовательностью строк: {field}")
+                raise TypeError(f"Field must be a string or sequence of strings: {field}")
         return Flux[Dict[str, Any]](ExcludeNode(self._node, flattened_fields))
 
-    # --- DSL Сортировки ---
+    # --- Sorting DSL ---
 
     def sortby(
         self,
@@ -132,13 +132,13 @@ class Flux(Generic[T]):
         reverse: bool = False,
     ) -> Flux[T]:
         """
-        Барьерная сортировка элементов.
-        Поддерживает: .sortby('age'), .sortby('-age'), .sortby('dept', '-age'),
-        а также callable: .sortby(lambda x: x['age']).
+        Barrier sorting of stream elements.
+        Supports: .sortby('age'), .sortby('-age'), .sortby('dept', '-age'),
+        as well as callables: .sortby(lambda x: x['age']).
         """
         return Flux[T](SortNode(self._node, keys, reverse=reverse))
 
-    # --- DSL Среза и пагинации ---
+    # --- Slicing & Pagination DSL ---
 
     def take(self, count: int) -> Flux[T]:
         return Flux[T](TakeNode(self._node, count))
@@ -147,22 +147,22 @@ class Flux(Generic[T]):
         return Flux[T](SkipNode(self._node, count))
 
     def head(self, count: int = 1) -> Flux[T]:
-        """Синоним к take(n)."""
+        """Synonym for take(n)."""
         return self.take(count)
 
     def tail(self, count: int = 1) -> Flux[T]:
         """
-        Возвращает последние n элементов в виде нового Flux (барьерная операция).
+        Returns the last n elements as a new Flux (barrier operation).
         """
         if count < 0:
-            raise ValueError("Параметр count не может быть отрицательным")
+            raise ValueError("Parameter count cannot be negative")
         if count == 0:
             return Flux[T]([])
-        # Реализуем через deque без загрузки всего потока при бесконечных генераторах
+        # Use bounded deque to avoid loading unbounded generators into memory
         buffer = collections.deque(self, maxlen=count)
         return Flux[T](list(buffer))
 
-    # --- Терминальные операции ---
+    # --- Terminal Operations ---
     
     def collect(self) -> List[T]:
         return list(self)
@@ -173,7 +173,7 @@ class Flux(Generic[T]):
         return default
 
     def last(self, default: Optional[T] = None) -> Optional[T]:
-        """Возвращает последний элемент потока."""
+        """Returns the last element of the stream."""
         val = default
         has_items = False
         for item in self:
@@ -188,13 +188,13 @@ class Flux(Generic[T]):
         return cnt
 
     def exists(self) -> bool:
-        """Проверяет наличие хотя бы одного элемента в потоке."""
+        """Checks if the stream contains at least one element."""
         for _ in self:
             return True
         return False
 
     def any(self, predicate: Optional[Callable[[T], bool]] = None) -> bool:
-        """True, если хотя бы один элемент удовлетворяет предикату (или поток не пуст)."""
+        """Returns True if any element matches the predicate (or if stream is non-empty when predicate is None)."""
         if predicate is None:
             return self.exists()
         for item in self:
@@ -203,51 +203,50 @@ class Flux(Generic[T]):
         return False
 
     def all(self, predicate: Callable[[T], bool]) -> bool:
-        """True, если все элементы удовлетворяют предикату."""
+        """Returns True if all elements satisfy the predicate."""
         for item in self:
             if not predicate(item):
                 return False
         return True
 
     def reduce(self, function: Callable[[Any, T], Any], *initial: Any) -> Any:
-        """Сворачивает поток с помощью функции function."""
+        """Folds the stream using an accumulator function."""
         if initial:
             return functools.reduce(function, self, initial[0])
         return functools.reduce(function, self)
 
-    # --- Диагностика ---
+    # --- Diagnostics ---
 
     def explain(self, optimized: bool = False) -> str:
         """
-        Диагностический API: возвращает строковое представление плана вычислений.
-        При optimized=True возвращает граф после применения оптимизатора.
+        Diagnostic API: returns string representation of the execution plan.
+        When optimized=True, returns the graph after optimizer transformations.
         """
         target_node = PlanOptimizer.optimize(self._node) if optimized else self._node
         return format_explain(target_node)
 
-    # --- Группировка ---
+    # --- Grouping ---
 
     def groupby(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
         """
-        Барьерная группировка элементов.
-        Возвращает Flux[Group], элементы которого содержат .key и .flux (подпоток элементов).
+        Barrier grouping of elements by key.
+        Returns Flux[Group], where each Group contains .key and .flux (sub-stream).
         """
-        
         return Flux(GroupByNode(self._node, key_selector))
 
-    # --- Устранение дубликатов ---
+    # --- Deduplication ---
 
     def distinct(
         self,
         key_selector: Optional[Union[str, Callable[[T], Any]]] = None,
     ) -> Flux[T]:
-        """Устраняет повторяющиеся элементы по значению или ключу."""
+        """Deduplicates elements by value or by key selector."""
         return Flux[T](DistinctNode(self._node, key_selector))
 
-    # --- Агрегационные терминальные операции ---
+    # --- Aggregations & Metrics ---
 
     def sum(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Union[int, float]:
-        """Суммирует элементы или значения полей."""
+        """Sums stream elements or extracted field values."""
         if selector is None:
             import builtins
             return builtins.sum(cast(Iterable[Union[int, float]], self))
@@ -261,7 +260,7 @@ class Flux(Generic[T]):
         return total
 
     def average(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
-        """Вычисляет среднее арифметическое элементов потока."""
+        """Computes arithmetic mean of stream elements or extracted field values."""
         total: Union[int, float] = 0
         count = 0
         if selector is None:
@@ -277,11 +276,11 @@ class Flux(Generic[T]):
                     total += val
                     count += 1
         if count == 0:
-            raise ValueError("Невозможно вычислить average для пустого потока")
+            raise ValueError("Cannot calculate average for an empty stream")
         return total / count
 
     def min(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
-        """Находит минимальный элемент."""
+        """Finds minimum element in the stream."""
         if selector is None:
             return min(self, key=lambda x: cast(Any, x))
         if callable(selector):
@@ -289,7 +288,7 @@ class Flux(Generic[T]):
         return min(self, key=lambda x: get_value(x, selector))
 
     def max(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
-        """Находит максимальный элемент."""
+        """Finds maximum element in the stream."""
         if selector is None:
             return max(self, key=lambda x: cast(Any, x))
         if callable(selector):
@@ -298,23 +297,22 @@ class Flux(Generic[T]):
 
     def materialize(self) -> Flux[T]:
         """
-        Материализует текущий пайплайн и возвращает новый Flux,
-        основанный на сохранённом неизменяемом кортеже элементов.
-        Позволяет безопасно многократно итерироваться по одноразовым генераторам.
+        Materializes the current pipeline and returns a new Flux backed by
+        an immutable cached tuple. Enables safe multiple iterations over single-use generators.
         """
         cached_data = tuple(self)
         return Flux[T](cached_data)
 
-    # --  Добавление полей к элементам потока (ExtendNode)  ---
+    # --- Field Enrichment (ExtendNode) ---
 
     def extend(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
         """
-        Добавляет вычисляемое поле в поток.
-        rule может быть callable, списком компонентов для склейки или константой.
+        Adds a computed field to stream elements.
+        rule can be a callable, list of path components for concatenation, or a literal constant.
         """
         return Flux[Dict[str, Any]](ExtendNode(self._node, field_name, rule))
 
-    # --- Реляционные операции (Joins) ---
+    # --- Relational Joins ---
 
     def join(
         self,
@@ -324,8 +322,8 @@ class Flux(Generic[T]):
         how: str = "inner",
     ) -> Flux[Dict[str, Any]]:
         """
-        Реляционное объединение с другим Flux по указанным ключам.
-        how: 'inner' или 'left'.
+        Relational join with another Flux on specified keys.
+        how: 'inner', 'left', 'right', or 'full'.
         """
         return Flux[Dict[str, Any]](
             JoinNode(
@@ -343,7 +341,7 @@ class Flux(Generic[T]):
         left_on: Union[str, Callable[[T], Any]],
         right_on: Union[str, Callable[[Any], Any]],
     ) -> Flux[Dict[str, Any]]:
-        """Алиас для внутреннего объединения (inner join)."""
+        """Alias for inner join."""
         return self.join(other, left_on=left_on, right_on=right_on, how="inner")
 
     def innerJoin(
@@ -360,7 +358,7 @@ class Flux(Generic[T]):
         left_on: Union[str, Callable[[T], Any]],
         right_on: Union[str, Callable[[Any], Any]],
     ) -> Flux[Dict[str, Any]]:
-        """Алиас для левого объединения (left join)."""
+        """Alias for left join."""
         return self.join(other, left_on=left_on, right_on=right_on, how="left")
 
     def leftJoin(
@@ -371,7 +369,7 @@ class Flux(Generic[T]):
     ) -> Flux[Dict[str, Any]]:
         return self.left_join(other, left_on, right_on)
 
-    # --- Новые методы Join ---
+    # --- Extended Join Methods ---
 
     def right_join(
         self,
@@ -379,7 +377,7 @@ class Flux(Generic[T]):
         left_on: Union[str, Callable[[T], Any]],
         right_on: Union[str, Callable[[Any], Any]],
     ) -> Flux[Dict[str, Any]]:
-        """Правое внешнее объединение (right outer join)."""
+        """Right outer join."""
         return self.join(other, left_on=left_on, right_on=right_on, how="right")
 
     @alias_for(right_join)
@@ -397,7 +395,7 @@ class Flux(Generic[T]):
         left_on: Union[str, Callable[[T], Any]],
         right_on: Union[str, Callable[[Any], Any]],
     ) -> Flux[Dict[str, Any]]:
-        """Полное внешнее объединение (full outer join)."""
+        """Full outer join."""
         return self.join(other, left_on=left_on, right_on=right_on, how="full")
 
     @alias_for(full_join)
@@ -410,44 +408,44 @@ class Flux(Generic[T]):
         return self.full_join(other, left_on, right_on)
 
     def cross_join(self, other: Flux[Any]) -> Flux[Dict[str, Any]]:
-        """Декартово произведение двух потоков (cross join)."""
+        """Cartesian product of two streams (cross join)."""
         return Flux[Dict[str, Any]](CrossJoinNode(self._node, other._node))
 
     @alias_for(cross_join)
     def crossJoin(self, other: Flux[Any]) -> Flux[Dict[str, Any]]:
         return self.cross_join(other)
 
-    # --- Оптимизация плана ---
+    # --- Plan Optimization ---
 
     def optimize(self) -> Flux[T]:
-        """Оптимизирует текущий граф вычислений и возвращает оптимизированный Flux."""
+        """Optimizes current execution graph and returns an optimized Flux."""
         optimized_node = PlanOptimizer.optimize(self._node)
         return Flux[T](optimized_node)
 
-    # --- Операции со множествами ---
+    # --- Set Operations ---
 
     def union(self, other: Flux[T]) -> Flux[T]:
-        """Объединяет текущий поток с другим потоком."""
+        """Concatenates current stream with another stream."""
         return Flux[T](UnionNode(self._node, other._node))
 
     def intersection(self, other: Flux[T]) -> Flux[T]:
-        """Возвращает пересечение элементов двух потоков."""
+        """Returns intersection of elements between two streams."""
         return Flux[T](IntersectionNode(self._node, other._node))
 
     def difference(self, other: Flux[T]) -> Flux[T]:
-        """Исключает из текущего потока элементы другого потока."""
+        """Excludes elements present in another stream from the current stream."""
         return Flux[T](DifferenceNode(self._node, other._node))
 
-    # --- Переименование полей ---
+    # --- Field Renaming ---
 
     def rename(self, **mapping: str) -> Flux[Dict[str, Any]]:
         """
-        Переименовывает поля в потоке.
-        Пример: .rename(old_name='new_name', user_id='id')
+        Renames fields in dictionaries or objects.
+        Example: .rename(old_name='new_name', user_id='id')
         """
         return Flux[Dict[str, Any]](RenameNode(self._node, mapping))
 
-    # --- Фабричные методы создания (Data Ingestion) ---
+    # --- Ingestion Factory Methods ---
 
     @classmethod
     def from_json(
@@ -456,7 +454,7 @@ class Flux(Generic[T]):
         lines: bool = False,
         encoding: str = "utf-8",
     ) -> Flux[Any]:
-        """Создает Flux из JSON-файла, строки или JSON Lines."""
+        """Creates a Flux stream from a JSON file, raw JSON string, or JSON Lines."""
         from fluxmonad.sources.loaders import read_json_source
         return Flux[Any](read_json_source(path_or_str, lines=lines, encoding=encoding))
 
@@ -467,29 +465,29 @@ class Flux(Generic[T]):
         encoding: str = "utf-8",
         delimiter: str = ",",
     ) -> Flux[Dict[str, Any]]:
-        """Лениво читает CSV файл построчно в виде словарей."""
+        """Lazily reads a CSV file row-by-row as dictionaries."""
         from fluxmonad.sources.loaders import read_csv_source
         return Flux[Dict[str, Any]](read_csv_source(filepath, encoding=encoding, delimiter=delimiter))
 
     @classmethod
     def from_yaml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
-        """Создает Flux из YAML-файла или строки."""
+        """Creates a Flux stream from a YAML file or raw string."""
         from fluxmonad.sources.loaders import read_yaml_source
         return Flux[Any](read_yaml_source(path_or_str, encoding=encoding))
 
     @classmethod
     def from_toml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
-        """Создает Flux из TOML документа (списка секций или словаря)."""
+        """Creates a Flux stream from a TOML document (section list or dictionary)."""
         from fluxmonad.sources.loaders import read_toml_source
         data = read_toml_source(path_or_str, encoding=encoding)
-        # Если TOML содержит корневой список или словарь
+        # If TOML root contains a list or dictionary
         if isinstance(data, list):
             return Flux[Any](data)
         return Flux[Any]([data])
 
     @classmethod
     def from_pandas(cls, df: Any) -> Flux[Dict[str, Any]]:
-        """Преобразует pandas.DataFrame в поток Flux словарей."""
+        """Converts a pandas.DataFrame into a streaming Flux of dictionaries."""
         from fluxmonad.sources.loaders import read_pandas_source
         return Flux[Dict[str, Any]](read_pandas_source(df))
 
@@ -499,13 +497,13 @@ class Flux(Generic[T]):
         filepath: Union[str, Any],
         sheet_name: Union[str, int] = 0,
     ) -> Flux[Dict[str, Any]]:
-        """Читает лист Excel (.xlsx) построчно в виде словарей."""
+        """Reads an Excel worksheet (.xlsx) row-by-row as dictionaries."""
         from fluxmonad.sources.loaders import read_excel_source
         return Flux[Dict[str, Any]](read_excel_source(filepath, sheet_name=sheet_name))
 
     @classmethod
     def from_file(cls, filepath: Union[str, Any]) -> Flux[Any]:
-        """Умная фабрика: определяет формат по расширению файла."""
+        """Smart factory: detects file format by extension and opens appropriate loader."""
         p = Path(filepath)
         ext = p.suffix.lower()
         if ext == ".csv":
@@ -519,9 +517,9 @@ class Flux(Generic[T]):
         elif ext in (".xlsx", ".xlsm"):
             return cls.from_excel(p)
         else:
-            raise ValueError(f"Неподдерживаемый формат файла: {ext}")
+            raise ValueError(f"Unsupported file format: {ext}")
 
-    # --- Алиасы для when / filterby / where ---
+    # --- Aliases for when / filterby / where ---
 
     @alias_for(when)
     def where(self, predicate: Union[None, Callable[[T], bool], Expression] = None, **kwargs: Any) -> Flux[T]:
@@ -535,7 +533,7 @@ class Flux(Generic[T]):
     def filterBy(self, predicate: Union[None, Callable[[T], bool], Expression] = None, **kwargs: Any) -> Flux[T]:
         return self.when(predicate, **kwargs)
 
-    # --- Алиасы для select / exclude ---
+    # --- Aliases for select / exclude ---
 
     @alias_for(select)
     def project(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
@@ -545,7 +543,7 @@ class Flux(Generic[T]):
     def drop(self, *fields: Union[str, Sequence[str]]) -> Flux[Dict[str, Any]]:
         return self.exclude(*fields)
 
-    # --- Алиасы для sortby ---
+    # --- Aliases for sortby ---
 
     @alias_for(sortby)
     def sort_by(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
@@ -563,7 +561,7 @@ class Flux(Generic[T]):
     def orderBy(self, *keys: Union[str, Callable[[T], Any]], reverse: bool = False) -> Flux[T]:
         return self.sortby(*keys, reverse=reverse)
 
-    # --- Алиасы для extend ---
+    # --- Aliases for extend ---
 
     @alias_for(extend)
     def with_field(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
@@ -573,7 +571,7 @@ class Flux(Generic[T]):
     def withField(self, field_name: str, rule: Any) -> Flux[Dict[str, Any]]:
         return self.extend(field_name, rule)
 
-    # --- Алиасы для groupby ---
+    # --- Aliases for groupby ---
 
     @alias_for(groupby)
     def group_by(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
@@ -583,13 +581,13 @@ class Flux(Generic[T]):
     def groupBy(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
         return self.groupby(key_selector)
 
-    # --- Алиасы для distinct ---
+    # --- Aliases for distinct ---
 
     @alias_for(distinct)
     def unique(self, key_selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Flux[T]:
         return self.distinct(key_selector)
 
-    # --- Алиасы для срезов: take / skip ---
+    # --- Aliases for slicing: take / skip ---
 
     @alias_for(take)
     def limit(self, count: int) -> Flux[T]:
@@ -599,7 +597,7 @@ class Flux(Generic[T]):
     def offset(self, count: int) -> Flux[T]:
         return self.skip(count)
 
-    # --- Алиасы для flat_map / bind ---
+    # --- Aliases for flat_map / bind ---
 
     @alias_for(bind)
     def flat_map(self, func: Callable[[T], Iterable[R]]) -> Flux[R]:
@@ -609,7 +607,7 @@ class Flux(Generic[T]):
     def flatMap(self, func: Callable[[T], Iterable[R]]) -> Flux[R]:
         return self.bind(func)
 
-    # --- Алиасы для терминальных операций ---
+    # --- Aliases for terminal operations ---
 
     @alias_for(collect)
     def to_list(self) -> List[T]:
@@ -666,18 +664,18 @@ class Flux(Generic[T]):
     def renameFields(self, **mapping: str) -> Flux[Dict[str, Any]]:
         return self.rename(**mapping)
 
-    # --- Разворот потока ---
+    # --- Stream Inversion ---
 
     def reverse(self) -> Flux[T]:
-        """Инвертирует порядок элементов потока (барьерная операция)."""
+        """Reverses stream element order (barrier operation)."""
         return Flux[T](ReverseNode(self._node))
 
-    # --- Инспекция / Logging ---
+    # --- Inspection & Logging ---
 
     def tap(self, action: Callable[[T], None]) -> Flux[T]:
         """
-        Выполняет действие над каждым элементом потока без изменения данных.
-        Идеально подходит для логирования шагов пайплайна.
+        Executes a side-effect action for each element without mutating stream data.
+        Ideal for debugging, telemetry, and pipeline step logging.
         """
         return Flux[T](TapNode(self._node, action))
 
@@ -685,13 +683,13 @@ class Flux(Generic[T]):
     def peek(self, action: Callable[[T], None]) -> Flux[T]:
         return self.tap(action)
 
-    # --- Спаривание потоков ---
+    # --- Stream Pairing ---
 
     def zip(self, other: Flux[R]) -> Flux[Tuple[T, R]]:
-        """Потоково объединяет элементы текущего Flux с элементами другого Flux в кортежи."""
+        """Lazily pairs elements of the current Flux with elements of another Flux into tuples."""
         return Flux(ZipNode(self._node, other._node))
 
-    # --- Разделение потока ---
+    # --- Stream Partitioning ---
 
     def partition(
         self,
@@ -699,19 +697,19 @@ class Flux(Generic[T]):
         **kwargs: Any,
     ) -> Tuple[Flux[T], Flux[T]]:
         """
-        Разделяет поток на два Flux: (matching_flux, not_matching_flux).
+        Splits the stream into two Flux instances: (matching_flux, not_matching_flux).
         """
         expr = build_expression(predicate, **kwargs)
-        # Материализуем источник, чтобы оба потока могли независимо итерироваться
+        # Materialize source so both resulting Flux branches can be iterated independently
         mat = self.materialize()
         matching = mat.when(expr)
         not_matching = mat.when(~expr)
         return matching, not_matching
 
-    # --- Пакетирование и окна ---
+    # --- Batching & Sliding Windows ---
 
     def chunk(self, size: int) -> Flux[List[T]]:
-        """Разбивает поток на непересекающиеся списки размера size."""
+        """Splits the stream into non-overlapping batches of size 'size'."""
         return Flux(ChunkNode(self._node, size))
 
     @alias_for(chunk)
@@ -719,16 +717,16 @@ class Flux(Generic[T]):
         return self.chunk(size)
 
     def window(self, size: int, step: int = 1) -> Flux[List[T]]:
-        """Формирует скользящее окно размера size с шагом step."""
+        """Generates a sliding window of size 'size' advancing by 'step'."""
         return Flux(WindowNode(self._node, size, step))
 
-    # --- Приведение типов ---
+    # --- Type Casting ---
 
     def cast(self, target_type: Callable[[Any], R]) -> Flux[R]:
-        """Приводит каждый элемент к указанному типу (например, dataclass, Pydantic модель, int)."""
+        """Casts each element to the specified type constructor (e.g., dataclass, Pydantic model, int)."""
         return self.map(target_type)
 
-    # --- Терминальный экспорт (Data Egress) ---
+    # --- Terminal Egress ---
 
     def to_json(
         self,
@@ -737,7 +735,7 @@ class Flux(Generic[T]):
         indent: int = 2,
         encoding: str = "utf-8",
     ) -> None:
-        """Сохраняет элементы потока в JSON или JSON Lines."""
+        """Saves stream elements to a JSON or JSON Lines file."""
         write_json(self, filepath, lines=lines, indent=indent, encoding=encoding)
 
     @alias_for(to_json)
@@ -750,24 +748,24 @@ class Flux(Generic[T]):
         delimiter: str = ",",
         encoding: str = "utf-8",
     ) -> None:
-        """Сохраняет элементы потока в CSV."""
+        """Saves stream elements to a CSV file."""
         write_csv(self, filepath, delimiter=delimiter, encoding=encoding)
 
     @alias_for(to_csv)
     def toCsv(self, filepath: Union[str, Any], delimiter: str = ",") -> None:
         self.to_csv(filepath, delimiter=delimiter)
 
-    # --- Запись YAML ---
+    # --- YAML Export ---
 
     def to_yaml(self, filepath: Union[str, Any], encoding: str = "utf-8") -> None:
-        """Сохраняет элементы потока в YAML-файл."""
+        """Saves stream elements to a YAML file."""
         write_yaml(self, filepath, encoding=encoding)
 
     @alias_for(to_yaml)
     def toYaml(self, filepath: Union[str, Any], encoding: str = "utf-8") -> None:
         self.to_yaml(filepath, encoding=encoding)
 
-    # --- Запись TOML ---
+    # --- TOML Export ---
 
     def to_toml(
         self,
@@ -775,7 +773,7 @@ class Flux(Generic[T]):
         root_key: str = "items",
         encoding: str = "utf-8",
     ) -> None:
-        """Сохраняет элементы потока в TOML-файл."""
+        """Saves stream elements to a TOML file."""
         write_toml(self, filepath, root_key=root_key, encoding=encoding)
 
     @alias_for(to_toml)
@@ -787,14 +785,14 @@ class Flux(Generic[T]):
     ) -> None:
         self.to_toml(filepath, root_key=root_key, encoding=encoding)
 
-    # --- Запись Excel ---
+    # --- Excel Export ---
 
     def to_excel(
         self,
         filepath: Union[str, Any],
         sheet_name: str = "Sheet1",
     ) -> None:
-        """Сохраняет элементы потока в таблицу Excel (.xlsx)."""
+        """Saves stream elements to an Excel spreadsheet (.xlsx)."""
         write_excel(self, filepath, sheet_name=sheet_name)
 
     @alias_for(to_excel)
@@ -805,10 +803,10 @@ class Flux(Generic[T]):
     ) -> None:
         self.to_excel(filepath, sheet_name=sheet_name)
 
-    # --- Умный метод сохранения по расширению ---
+    # --- Smart File Export ---
 
     def to_file(self, filepath: Union[str, Any], **kwargs: Any) -> None:
-        """Автоматически определяет формат по расширению файла и выполняет экспорт."""
+        """Automatically detects destination format by file extension and executes export."""
         p = Path(filepath)
         ext = p.suffix.lower()
         if ext == ".csv":
@@ -823,24 +821,24 @@ class Flux(Generic[T]):
         elif ext in (".xlsx", ".xlsm"):
             self.to_excel(p, **kwargs)
         else:
-            raise ValueError(f"Неподдерживаемый формат для сохранения: {ext}")
+            raise ValueError(f"Unsupported format for export: {ext}")
 
     @alias_for(to_file)
     def toFile(self, filepath: Union[str, Any], **kwargs: Any) -> None:
         self.to_file(filepath, **kwargs)
 
-    # --- Аналитика последовательностей ---
+    # --- Sequence Analytics ---
 
     def enumerate(self, start: int = 0, field: Optional[str] = None) -> Flux[Any]:
         """
-        Нумерует записи потока.
-        Если field указан — добавляет поле с номером в словарь/объект.
-        Если field=None — возвращает поток кортежей (индекс, элемент).
+        Enumerates stream records.
+        If field is specified, sets the index under that field in each dictionary/object.
+        If field=None, produces a stream of (index, item) tuples.
         """
         return Flux[Any](EnumerateNode(self._node, start=start, field=field))
 
     def cumulative_sum(self, field: str, target_field: Optional[str] = None) -> Flux[Dict[str, Any]]:
-        """Вычисляет нарастающий итог по указанному числовому полю."""
+        """Calculates running cumulative sum for the specified numeric field."""
         return Flux[Dict[str, Any]](CumulativeSumNode(self._node, field, target_field))
 
     @alias_for(cumulative_sum)
@@ -858,7 +856,7 @@ class Flux(Generic[T]):
         target_field: Optional[str] = None,
         default: Any = None,
     ) -> Flux[Dict[str, Any]]:
-        """Добавляет в запись значение поля из предыдущей записи (со смещением offset)."""
+        """Appends the value of a field from an earlier record (offset positions back) to current record."""
         return Flux[Dict[str, Any]](
             LagLeadNode(self._node, field, offset=offset, target_field=target_field, default=default, is_lead=False)
         )
@@ -870,58 +868,58 @@ class Flux(Generic[T]):
         target_field: Optional[str] = None,
         default: Any = None,
     ) -> Flux[Dict[str, Any]]:
-        """Добавляет в запись значение поля из следующей записи (со смещением offset)."""
+        """Appends the value of a field from a future record (offset positions ahead) to current record."""
         return Flux[Dict[str, Any]](
             LagLeadNode(self._node, field, offset=offset, target_field=target_field, default=default, is_lead=True)
         )
 
-    # --- Статистические терминальные метрики ---
+    # --- Statistical Metrics ---
 
     def median(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
-        """Вычисляет медиану потока."""
+        """Computes stream median."""
         vals: List[float] = [
             float(get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else cast(Any, item)))
             for item in self
         ]
         if not vals:
-            raise ValueError("Медиана не может быть вычислена для пустого потока")
+            raise ValueError("Cannot calculate median of an empty stream")
         return float(statistics.median(vals))
 
     def mode(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Any:
-        """Вычисляет моду (наиболее часто встречающийся элемент)."""
+        """Computes stream mode (most frequent element)."""
         vals = [
             get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
             for item in self
         ]
         if not vals:
-            raise ValueError("Мода не может быть вычислена для пустого потока")
+            raise ValueError("Cannot calculate mode of an empty stream")
         return statistics.mode(vals)
 
     def std_dev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
-        """Вычисляет выборочное стандартное отклонение."""
+        """Computes sample standard deviation."""
         vals: List[float] = [
             float(get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else cast(Any, item)))
             for item in self
         ]
         if len(vals) < 2:
-            raise ValueError("Стандартное отклонение требует как минимум двух значений")
+            raise ValueError("Standard deviation requires at least two data points")
         return float(statistics.stdev(vals))
 
     @alias_for(std_dev)
     def stdDev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
         return self.std_dev(selector)
 
-    # --- Выравнивание структур ---
+    # --- Structural Flattening ---
 
     def flatten(self, field: Optional[str] = None) -> Flux[Any]:
-        """Разворачивает вложенные списки в корень потока или по указанному полю."""
+        """Unrolls nested lists into the stream root or under the specified field."""
         from fluxmonad.plan.transforms import FlattenNode
         return Flux[Any](FlattenNode(self._node, field))
 
-    # --- Обработка Null / Missing ---
+    # --- Null & Missing Value Handling ---
 
     def fill_null(self, **defaults: Any) -> Flux[T]:
-        """Заменяет None значения указанных полей на заданные по умолчанию."""
+        """Replaces None or missing values with specified default values."""
         from fluxmonad.plan.transforms import FillNullNode
         return Flux[T](FillNullNode(self._node, defaults))
 
@@ -933,7 +931,7 @@ class Flux(Generic[T]):
     def fillna(self, **defaults: Any) -> Flux[T]:
         return self.fill_null(**defaults)
 
-    # --- Условное ветвление ---
+    # --- Conditional Branching ---
 
     def branch(
         self,
@@ -941,18 +939,18 @@ class Flux(Generic[T]):
         if_true: Callable[[T], Any],
         if_false: Optional[Callable[[T], Any]] = None,
     ) -> Flux[Any]:
-        """Условная трансформация элементов по предикату."""
+        """Conditional transformation of elements based on a predicate."""
         from fluxmonad.plan.transforms import BranchNode
         return Flux[Any](BranchNode(self._node, predicate, if_true, if_false))
 
-    # --- Сэмплинг ---
+    # --- Sampling ---
 
     def sample(self, n: int, seed: Optional[int] = None) -> Flux[T]:
-        """Случайная выборка n элементов методом резервуарного сэмплинга."""
+        """Reservoir sampling of n random elements from the stream."""
         from fluxmonad.plan.barriers import SampleNode
         return Flux[T](SampleNode(self._node, n, seed=seed))
 
-    # --- Отказоустойчивость ---
+    # --- Resilience & Error Handling ---
 
     def catch(
         self,
@@ -960,9 +958,9 @@ class Flux(Generic[T]):
         exceptions: Tuple[Type[Exception], ...] = (Exception,),
     ) -> Flux[T]:
         """
-        Перехватывает исключения в потоке.
-        Если handler возвращает значение — оно подставляется в поток.
-        Если handler=None — сбойный элемент просто отбрасывается.
+        Intercepts exceptions in the stream.
+        If handler returns a value, that value is emitted into the stream.
+        If handler=None, the failing element is silently dropped.
         """
         return Flux[T](CatchNode(self._node, handler=handler, exceptions=exceptions))
 
@@ -975,18 +973,18 @@ class Flux(Generic[T]):
         return self.catch(handler=handler, exceptions=exceptions)
 
     def compact(self) -> Flux[T]:
-        """Удаляет все элементы None из потока."""
+        """Removes all None elements from the stream."""
         return Flux[T](CompactNode(self._node))
 
     # --- Async Support ---
 
     async def __aiter__(self) -> AsyncIterator[T]:
-        """Асинхронный генератор для обхода пайплайна через async for."""
+        """Asynchronous iterator for consuming pipeline via async for."""
         for item in self:
             yield item
 
     async def collect_async(self) -> List[T]:
-        """Асинхронно собирает результаты потока в список."""
+        """Asynchronously collects stream results into a list."""
         res: List[T] = []
         async for item in self:
             res.append(item)
@@ -996,7 +994,7 @@ class Flux(Generic[T]):
     async def toListAsync(self) -> List[T]:
         return await self.collect_async()
 
-    # --- Конкурентность и параллелизм ---
+    # --- Concurrency & Parallelism ---
 
     def parallel_map(
         self,
@@ -1006,8 +1004,8 @@ class Flux(Generic[T]):
         backend: str = "thread",
     ) -> Flux[R]:
         """
-        Параллельное вычисление функции над потоком.
-        backend: 'thread' (рекомендуется для I/O) или 'process' (для тяжелых CPU задач).
+        Parallel function evaluation over stream elements.
+        backend: 'thread' (recommended for I/O bound work) or 'process' (for CPU bound work).
         """
         return Flux[R](
             ParallelMapNode(
@@ -1039,11 +1037,11 @@ class Flux(Generic[T]):
     ) -> Flux[R]:
         return self.parallel_map(func, workers=workers, chunksize=chunksize, backend=backend)
 
-    # --- Профилирование и телеметрия ---
+    # --- Profiling & Telemetry ---
 
     def profile(self) -> ProfileResult:
         """
-        Выполняет пайплайн с замером времени и объема данных на каждом шаге.
-        Возвращает ProfileResult со сводкой и финальными данными.
+        Executes pipeline while measuring time elapsed and item throughput at each step.
+        Returns ProfileResult containing step metrics and final materialized items.
         """
         return profile_pipeline(self._node)

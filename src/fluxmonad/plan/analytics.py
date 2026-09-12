@@ -7,7 +7,7 @@ from fluxmonad.plan.node import Node
 
 
 class EnumerateNode(Node):
-    """Стриминговое добавление порядкового номера/индекса к элементам."""
+    """Streaming addition of zero-based or custom index to elements."""
 
     def __init__(self, parent: Node, start: int = 0, field: Optional[str] = None) -> None:
         super().__init__(parent=parent)
@@ -37,7 +37,7 @@ class EnumerateNode(Node):
 
 
 class CumulativeSumNode(Node):
-    """Стриминговый расчет нарастающего итога (running sum)."""
+    """Streaming calculation of running cumulative sum."""
 
     def __init__(self, parent: Node, field: str, target_field: Optional[str] = None) -> None:
         super().__init__(parent=parent)
@@ -71,8 +71,8 @@ class CumulativeSumNode(Node):
 
 class LagLeadNode(Node):
     """
-    Аналитический узел LAG / LEAD.
-    Использует ограниченный скользящий буфер (deque), не загружая весь поток в память.
+    LAG / LEAD windowing analytics node.
+    Utilizes a bounded sliding buffer (deque) with O(offset) space, without materializing the full stream.
     """
 
     def __init__(
@@ -86,7 +86,7 @@ class LagLeadNode(Node):
     ) -> None:
         super().__init__(parent=parent)
         if offset <= 0:
-            raise ValueError("Смещение offset должно быть строго больше 0")
+            raise ValueError("Offset must be strictly greater than 0")
         self.field = field
         self.offset = offset
         self.target_field = target_field or (f"{field}_lead{offset}" if is_lead else f"{field}_lag{offset}")
@@ -95,7 +95,7 @@ class LagLeadNode(Node):
 
     @property
     def is_barrier(self) -> bool:
-        # Для lead требуется опережающий буфер размера offset + 1, но не материализация всего потока
+        # LEAD requires a forward buffer of size offset + 1, not entire stream materialization
         return False
 
     def _enrich(self, item: Any, value: Any) -> Any:
@@ -112,7 +112,7 @@ class LagLeadNode(Node):
         stream = self.parent.evaluate()
 
         if not self.is_lead:
-            # LAG: храним историю прошлых значений
+            # LAG: keep history of past values
             history: Deque[Any] = collections.deque(maxlen=self.offset)
             for item in stream:
                 lag_val = history[0] if len(history) == self.offset else self.default
@@ -120,7 +120,7 @@ class LagLeadNode(Node):
                 history.append(val)
                 yield self._enrich(item, lag_val)
         else:
-            # LEAD: храним буфер будущих записей
+            # LEAD: keep buffer of future records
             buffer: Deque[Any] = collections.deque()
             for _ in range(self.offset):
                 try:
@@ -134,7 +134,7 @@ class LagLeadNode(Node):
                 buffer.append(item)
                 yield self._enrich(current_item, lead_val)
 
-            # Оставшиеся в буфере элементы в конце потока
+            # Flush remaining items in buffer at the end of the stream
             while buffer:
                 current_item = buffer.popleft()
                 yield self._enrich(current_item, self.default)

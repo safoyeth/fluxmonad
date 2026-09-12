@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 class _ComparableWrapper:
-    """Обертка для безопасного сравнения значений с поддержкой DESC-направления."""
+    """Wrapper for safe value comparison with support for descending sort direction."""
 
     __slots__ = ("value", "descending")
 
@@ -32,11 +32,11 @@ class _ComparableWrapper:
         self.descending = descending
 
     def __lt__(self, other: "_ComparableWrapper") -> bool:
-        # Если значения равны — ни одно не меньше другого
+        # If values are equal, neither is less than the other
         if self.value == other.value:
             return False
 
-        # Обработка отсутствующих значений и None
+        # Handle missing and None values
         if self.value is MISSING or self.value is None:
             return not self.descending
         if other.value is MISSING or other.value is None:
@@ -47,7 +47,7 @@ class _ComparableWrapper:
         except TypeError:
             less = str(self.value) < str(other.value)
 
-        # Если задан порядок убывания, переворачиваем логику <
+        # Invert logic if descending is specified
         return not less if self.descending else less
 
     def __eq__(self, other: Any) -> bool:
@@ -58,8 +58,8 @@ class _ComparableWrapper:
 
 class SortNode(Node):
     """
-    Барьерный узел сортировки потока.
-    Полностью материализует входной поток перед упорядочиванием.
+    Barrier node for sorting the stream.
+    Fully materializes the input stream before ordering.
     """
 
     def __init__(
@@ -88,7 +88,7 @@ class SortNode(Node):
                 val = get_value(item, path, default=MISSING)
                 result.append(_ComparableWrapper(val, descending=is_desc))
             else:
-                raise TypeError(f"Ключ сортировки должен быть строкой или callable, получен {type(key)}")
+                raise TypeError(f"Sort key must be a string or callable, got {type(key)}")
         return tuple(result)
 
     def evaluate(self) -> Iterator[Any]:
@@ -113,7 +113,7 @@ class SortNode(Node):
 
 
 class Group(Generic[T]):
-    """Контейнер отдельной группы данных с доступом к ключу и элементам в виде Flux."""
+    """Container for a distinct data group with access to the key and group elements via Flux."""
 
     __slots__ = ("key", "values")
 
@@ -137,8 +137,8 @@ class Group(Generic[T]):
 
     def aggregate(self, **aggregations: Union[str, Callable[["Flux[T]"], Any]]) -> Dict[str, Any]:
         """
-        Вычисляет набор агрегатных показателей над элементами группы.
-        Пример: group.aggregate(total_salary="sum:salary", avg_age="avg:age", count="count")
+        Computes a set of aggregate metrics over the group's elements.
+        Example: group.aggregate(total_salary="sum:salary", avg_age="avg:age", count="count")
         """
         result: Dict[str, Any] = {"key": self.key}
         sub_flux = self.flux
@@ -162,16 +162,16 @@ class Group(Generic[T]):
                 elif op == "max":
                     result[target_name] = sub_flux.max(field)
                 else:
-                    raise ValueError(f"Неизвестная операция агрегации: {op}")
+                    raise ValueError(f"Unknown aggregation operation: {op}")
             else:
-                raise TypeError(f"Спецификация агрегации должна быть строкой или callable: {agg_spec}")
+                raise TypeError(f"Aggregation specification must be a string or callable: {agg_spec}")
 
         return result
 
 class GroupByNode(Node):
     """
-    Барьерный узел группировки элементов по ключу.
-    Эмитит объекты Group(key, values).
+    Barrier node grouping elements by a key selector.
+    Emits Group(key, values) objects.
     """
 
     def __init__(self, parent: Node, key_selector: Union[str, Callable[[Any], Any]]) -> None:
@@ -187,13 +187,13 @@ class GroupByNode(Node):
             return self.key_selector(item)
         if isinstance(self.key_selector, str):
             return get_value(item, self.key_selector, default=None)
-        raise TypeError(f"Селектор ключа должен быть строкой или callable: {type(self.key_selector)}")
+        raise TypeError(f"Key selector must be a string or callable: {type(self.key_selector)}")
 
     def evaluate(self) -> Iterator[Group[Any]]:
         assert self.parent is not None
         groups: DefaultDict[Any, List[Any]] = collections.defaultdict(list)
 
-        # Барьер: материализуем входящие данные в группы с сохранением порядка появления
+        # Barrier: materialize incoming stream into groups preserving appearance order
         for item in self.parent.evaluate():
             k = self._extract_key(item)
             groups[k].append(item)
@@ -207,8 +207,8 @@ class GroupByNode(Node):
 
 class DistinctNode(Node):
     """
-    Барьерный узел устранения дубликатов.
-    Поддерживает селектор ключа: .distinct('id') или .distinct(lambda x: x.email).
+    Barrier node for deduplicating stream elements.
+    Supports key selectors: .distinct('id') or .distinct(lambda x: x.email).
     """
 
     def __init__(
@@ -230,7 +230,7 @@ class DistinctNode(Node):
             return self.key_selector(item)
         if isinstance(self.key_selector, str):
             return get_value(item, self.key_selector, default=None)
-        raise TypeError(f"Селектор ключа должен быть строкой или callable: {type(self.key_selector)}")
+        raise TypeError(f"Key selector must be a string or callable: {type(self.key_selector)}")
 
     def evaluate(self) -> Iterator[Any]:
         assert self.parent is not None
@@ -245,7 +245,7 @@ class DistinctNode(Node):
                 seen_keys.add(key)
                 yield item
             except TypeError:
-                # Fallback для нехешируемых объектов (словари, списки)
+                # Fallback for unhashable objects (dicts, lists)
                 if key in seen_unhashable:
                     continue
                 seen_unhashable.append(key)
@@ -257,8 +257,8 @@ class DistinctNode(Node):
 
 class ReverseNode(Node):
     """
-    Барьерный узел инверсии порядка элементов потока.
-    Полностью материализует входной поток перед разворотом.
+    Barrier node that reverses the order of stream elements.
+    Fully materializes the input stream before reversing.
     """
 
     def __init__(self, parent: Node) -> None:
@@ -279,14 +279,14 @@ class ReverseNode(Node):
     
 class SampleNode(Node):
     """
-    Потоковая выборка n случайных элементов (Reservoir Sampling).
-    Требует O(n) памяти вне зависимости от общего размера потока.
+    Reservoir sampling of n random elements from a stream.
+    Requires O(n) memory regardless of total stream size.
     """
 
     def __init__(self, parent: Node, n: int, seed: Optional[int] = None) -> None:
         super().__init__(parent=parent)
         if n <= 0:
-            raise ValueError("Параметр n должен быть больше 0")
+            raise ValueError("Parameter n must be greater than 0")
         self.n = n
         self.seed = seed
 

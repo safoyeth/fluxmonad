@@ -11,7 +11,7 @@ def write_json(
     indent: int = 2,
     encoding: str = "utf-8",
 ) -> None:
-    """Записывает элементы потока в JSON или JSON Lines."""
+    """Writes stream elements to a JSON or JSON Lines file."""
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -30,7 +30,7 @@ def write_csv(
     delimiter: str = ",",
     encoding: str = "utf-8",
 ) -> None:
-    """Записывает словари или объекты потока в CSV файл."""
+    """Writes dictionaries or objects from the stream to a CSV file."""
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -46,7 +46,7 @@ def write_csv(
     elif hasattr(first_row, "__dict__"):
         fieldnames = [k for k in first_row.__dict__.keys() if not k.startswith("_")]
     else:
-        raise TypeError("Для записи в CSV элементы должны быть словарями или dataclass/объектами")
+        raise TypeError("Writing to CSV requires elements to be dictionaries, dataclasses, or objects")
 
     with open(path, mode="w", encoding=encoding, newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=delimiter)
@@ -61,11 +61,11 @@ def write_yaml(
     filepath: Union[str, Path],
     encoding: str = "utf-8",
 ) -> None:
-    """Записывает элементы потока в YAML-файл (требуется PyYAML)."""
+    """Writes stream elements to a YAML file (requires PyYAML)."""
     try:
         import yaml
     except ImportError:
-        raise ImportError("Для записи YAML необходимо установить PyYAML: pip install pyyaml")
+        raise ImportError("Writing YAML requires PyYAML: pip install pyyaml")
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -82,11 +82,11 @@ def write_toml(
     encoding: str = "utf-8",
 ) -> None:
     """
-    Записывает элементы потока в TOML-файл.
-    Поскольку TOML верхнеуровнево требует таблицу (key-value),
-    список элементов помещается под ключ `root_key` (по умолчанию 'items'),
-    либо записывается напрямую, если поток состоит из одной структуры-словаря.
-    Требуется tomli-w (или rtoml).
+    Writes stream elements to a TOML file.
+    Since TOML requires a top-level table (key-value),
+    the list of items is nested under `root_key` (default 'items'),
+    or written directly if the stream contains a single dictionary.
+    Requires tomli-w (or rtoml).
     """
     try:
         import tomli_w
@@ -96,13 +96,13 @@ def write_toml(
             import rtoml  # pyright: ignore[reportMissingImports]
             dump_fn = None
         except ImportError:
-            raise ImportError("Для записи TOML необходимо установить tomli-w: pip install tomli-w")
+            raise ImportError("Writing TOML requires tomli-w: pip install tomli-w")
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     data = list(items)
-    # Если передан ровно один словарь, сохраняем его корневым документом
+    # If exactly one dict is passed, save it as top-level document
     payload = data[0] if len(data) == 1 and isinstance(data[0], dict) else {root_key: data}
 
     if dump_fn is not None:
@@ -118,11 +118,11 @@ def write_excel(
     filepath: Union[str, Path],
     sheet_name: str = "Sheet1",
 ) -> None:
-    """Записывает словари или объекты потока в Excel (.xlsx) через openpyxl."""
+    """Writes dictionaries or objects from the stream to an Excel (.xlsx) file via openpyxl."""
     try:
         import openpyxl
     except ImportError:
-        raise ImportError("Для записи Excel (.xlsx) необходимо установить openpyxl: pip install openpyxl")
+        raise ImportError("Writing Excel (.xlsx) requires openpyxl: pip install openpyxl")
 
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)

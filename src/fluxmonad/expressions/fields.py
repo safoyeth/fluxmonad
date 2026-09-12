@@ -4,7 +4,7 @@ from fluxmonad.expressions.base import Expression
 
 
 class BinaryOp(Expression):
-    """Бинарная операция сравнения значения поля с константой."""
+    """Binary comparison operation between a field value and a constant or expression."""
 
     def __init__(self, field_path: str, value: Any, op_name: str) -> None:
         self.field_path = field_path
@@ -143,7 +143,7 @@ class Contains(BinaryOp):
 
 
 class Field:
-    """Дескриптор поля для построения выражений в коде: Field('age') >= 18."""
+    """Field descriptor for constructing declarative filter expressions: Field('age') >= 18."""
 
     def __init__(self, path: str) -> None:
         self.path = path

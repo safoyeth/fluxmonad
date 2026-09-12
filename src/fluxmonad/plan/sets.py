@@ -3,7 +3,7 @@ from fluxmonad.plan.node import Node
 
 
 class UnionNode(Node):
-    """Ленивое объединение двух потоков данных (конкатенация)."""
+    """Lazy union of two data streams (concatenation)."""
 
     def __init__(self, parent: Node, other: Node) -> None:
         super().__init__(parent=parent)
@@ -25,7 +25,7 @@ class UnionNode(Node):
 
 
 class IntersectionNode(Node):
-    """Барьерное пересечение двух потоков (оставляет только общие элементы)."""
+    """Barrier intersection of two streams (retains only common elements)."""
 
     def __init__(self, parent: Node, other: Node) -> None:
         super().__init__(parent=parent)
@@ -44,7 +44,7 @@ class IntersectionNode(Node):
                 if item in other_set:
                     yield item
         except TypeError:
-            # Fallback для нехешируемых элементов
+            # Fallback for unhashable elements
             for item in self.parent.evaluate():
                 if item in other_items:
                     yield item
@@ -54,7 +54,7 @@ class IntersectionNode(Node):
 
 
 class DifferenceNode(Node):
-    """Барьерная разность потоков (исключает элементы, присутствующие в other)."""
+    """Barrier difference of two streams (excludes elements present in other)."""
 
     def __init__(self, parent: Node, other: Node) -> None:
         super().__init__(parent=parent)

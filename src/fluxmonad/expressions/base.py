@@ -9,7 +9,7 @@ class Expression(ABC):
 
     @property
     def referenced_fields(self) -> set[str]:
-        """Множество полей, которые требуются для вычисления выражения."""
+        """Set of fields required to evaluate this expression."""
         return set()
 
     def __and__(self, other: "Expression") -> "Expression":
@@ -34,5 +34,5 @@ class Expression(ABC):
 
     @abstractmethod
     def explain(self) -> str:
-        """Строковое представление выражения для плана исполнения."""
+        """String representation of the expression for the execution plan."""
         pass

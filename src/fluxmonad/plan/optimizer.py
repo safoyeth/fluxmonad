@@ -14,12 +14,12 @@ from fluxmonad.plan.transforms import (
 )
 
 def get_filter_fields(expr: Any) -> Set[str]:
-    """Извлекает имена полей из предиката, игнорируя пустые заглушки базовых классов."""
+    """Extracts field names referenced by a predicate, ignoring empty base class stubs."""
     fields: Set[str] = set()
     if expr is None:
         return fields
 
-    # 1. Проверяем referenced_fields, но учитываем ТОЛЬКО непустой результат
+    # 1. Inspect referenced_fields, considering ONLY non-empty sets
     if hasattr(expr, "referenced_fields"):
         try:
             rf = expr.referenced_fields
@@ -28,7 +28,7 @@ def get_filter_fields(expr: Any) -> Set[str]:
         except Exception:
             pass
 
-    # 2. Проверяем вложенные выражения/обертки
+    # 2. Inspect nested expressions / wrappers
     for attr in ("inner", "expr", "predicate"):
         if hasattr(expr, attr):
             inner = getattr(expr, attr)
@@ -37,7 +37,7 @@ def get_filter_fields(expr: Any) -> Set[str]:
                 if res:
                     return res
 
-    # 3. Извлекаем поле из атрибутов левой части / имени поля
+    # 3. Extract field from left-hand side attributes / field name
     for attr in ("left", "field", "field_name", "path", "name", "column", "field_path"):
         val = getattr(expr, attr, None)
         if val is not None:
@@ -48,7 +48,7 @@ def get_filter_fields(expr: Any) -> Set[str]:
             elif hasattr(val, "name"):
                 fields.add(str(val.name).split(".")[0].strip())
 
-    # 4. Если в выражении есть список подвыражений (And, Or)
+    # 4. If expression has composite child expressions (And, Or)
     if hasattr(expr, "expressions"):
         for sub in getattr(expr, "expressions", []):
             fields.update(get_filter_fields(sub))
@@ -59,7 +59,7 @@ def get_filter_fields(expr: Any) -> Set[str]:
 class PlanOptimizer:
     @classmethod
     def optimize(cls, node: Node) -> Node:
-        # 1. Извлекаем цепочку от Source к Terminal (клонируя узлы)
+        # 1. Extract linear chain from Source to Terminal (shallow-cloning nodes)
         nodes: List[Node] = []
         curr: Optional[Node] = node
         while curr is not None:
@@ -70,7 +70,7 @@ class PlanOptimizer:
         if not nodes:
             return node
 
-        # 2. Predicate Pushdown: проталкиваем FilterNode к началу
+        # 2. Predicate Pushdown: push FilterNodes upstream towards the source
         changed = True
         while changed:
             changed = False
@@ -83,7 +83,7 @@ class PlanOptimizer:
                         nodes[i - 1], nodes[i] = curr_node, prev_node
                         changed = True
 
-        # 3. Сворачивание смежных узлов (Take/Skip/Filter)
+        # 3. Collapse adjacent nodes (Take/Skip/Filter fusion)
         collapsed: List[Node] = []
         for n in nodes:
             if not collapsed:
@@ -110,7 +110,7 @@ class PlanOptimizer:
 
             collapsed.append(n)
 
-        # 4. Восстанавливаем связи parent
+        # 4. Reconstruct parent-child node links
         collapsed[0].parent = None
         for i in range(1, len(collapsed)):
             collapsed[i].parent = collapsed[i - 1]
@@ -121,15 +121,15 @@ class PlanOptimizer:
     def _can_swap(cls, filter_node: FilterNode, prev_node: Node) -> bool:
         filter_fields = get_filter_fields(filter_node.expr)
 
-        # Через TapNode сдвигать можно всегда
+        # Safe to push past TapNode
         if isinstance(prev_node, TapNode):
             return True
 
-        # Если не удалось точно определить поля фильтра — перестановка с изменением схемы НЕБЕЗОПАСНА
+        # If referenced fields cannot be determined, swapping across schema transforms is UNSAFE
         if not filter_fields:
             return False
 
-        # Через ExtendNode
+        # Past ExtendNode
         if isinstance(prev_node, ExtendNode):
             target = getattr(prev_node, "target_field", getattr(prev_node, "name", None))
             if not target:
@@ -137,14 +137,14 @@ class PlanOptimizer:
 
             target_str = str(target).split(".")[0].strip()
 
-            # Если целевое поле совпадает с зависимостью фильтра — ЗАПРЕЩАЕМ перестановку
+            # If target field is referenced in filter, do NOT swap
             if target_str in filter_fields:
                 return False
 
-            # Фильтр проверяет другие поля (например 'age'), а создается 'label' — РАЗРЕШАЕМ
+            # Filter references independent fields (e.g. 'age') while node extends 'label' -> ALLOW
             return True
 
-        # Через RenameNode
+        # Past RenameNode
         if isinstance(prev_node, RenameNode):
             keys = set(prev_node.mapping.keys()) | set(prev_node.mapping.values())
             if filter_fields & keys:

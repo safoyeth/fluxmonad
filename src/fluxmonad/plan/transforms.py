@@ -11,7 +11,7 @@ from fluxmonad.plan.node import Node
 
 
 class MapNode(Node):
-    """Стриминговое отображение элементов."""
+    """Streaming element transformation."""
 
     def __init__(self, parent: Node, func: Callable[[Any], Any]) -> None:
         super().__init__(parent=parent)
@@ -30,7 +30,7 @@ class MapNode(Node):
 
 
 class FilterNode(Node):
-    """Стриминговая фильтрация элементов по выражению или предикату."""
+    """Streaming element filtering based on an expression or predicate."""
 
     def __init__(self, parent: Node, predicate_or_expr: Union[Callable[[Any], bool], Expression]) -> None:
         super().__init__(parent=parent)
@@ -52,7 +52,7 @@ class FilterNode(Node):
 
 
 class SelectNode(Node):
-    """Стриминговая проекция: оставляет только указанные поля."""
+    """Streaming projection: retains only the specified fields."""
 
     def __init__(self, parent: Node, fields: Sequence[str]) -> None:
         super().__init__(parent=parent)
@@ -72,7 +72,7 @@ class SelectNode(Node):
 
 
 class ExcludeNode(Node):
-    """Стриминговое исключение указанных полей."""
+    """Streaming projection: excludes the specified fields."""
 
     def __init__(self, parent: Node, fields: Sequence[str]) -> None:
         super().__init__(parent=parent)
@@ -92,12 +92,12 @@ class ExcludeNode(Node):
 
 
 class TakeNode(Node):
-    """Стриминговое ограничение количества элементов с ранней остановкой."""
+    """Streaming element count limiter with early termination."""
 
     def __init__(self, parent: Node, count: int) -> None:
         super().__init__(parent=parent)
         if count < 0:
-            raise ValueError("Параметр count не может быть отрицательным")
+            raise ValueError("Parameter count cannot be negative")
         self.count = count
 
     @property
@@ -113,9 +113,9 @@ class TakeNode(Node):
 
 class BindNode(Node):
     """
-    Монадический узел (flat_map).
-    Применяет функцию func к каждому элементу и разворачивает полученную
-    последовательность (один уровень flatten) в потоковом режиме.
+    Monadic bind node (flat_map).
+    Applies func to each element and flattens the resulting
+    collection (one level of nesting) in a streaming fashion.
     """
 
     def __init__(self, parent: Node, func: Callable[[Any], Any]) -> None:
@@ -130,7 +130,7 @@ class BindNode(Node):
         assert self.parent is not None
         for item in self.parent.evaluate():
             sub_result = self.func(item)
-            # Поддерживаем как обычные Iterable, так и инстансы Flux или генераторы
+            # Support standard Iterables, Flux instances, and generators
             for sub_item in sub_result:
                 yield sub_item
 
@@ -138,12 +138,12 @@ class BindNode(Node):
         return f"BIND: {getattr(self.func, '__name__', str(self.func))}"
 
 class SkipNode(Node):
-    """Стриминговый пропуск первых n элементов."""
+    """Streaming skip of the first n elements."""
 
     def __init__(self, parent: Node, count: int) -> None:
         super().__init__(parent=parent)
         if count < 0:
-            raise ValueError("Параметр count не может быть отрицательным")
+            raise ValueError("Parameter count cannot be negative")
         self.count = count
 
     @property
@@ -159,8 +159,8 @@ class SkipNode(Node):
 
 class ExtendNode(Node):
     """
-    Стриминговое добавление/обогащение элементов новым полем.
-    Возвращает копию словаря или объекта с добавленным полем.
+    Streaming enrichment of elements with a new or calculated field.
+    Returns a shallow copy of the dictionary or object with the added field.
     """
 
     def __init__(self, parent: Node, field_name: str, rule: Any) -> None:
@@ -184,8 +184,7 @@ class ExtendNode(Node):
             parts = []
             for part in self.rule:
                 if isinstance(part, str):
-                    # Если строка не является потенциальным путем (содержит пробелы и т.п.),
-                    # используем её сразу как литерал
+                    # If string is not a valid field path (contains spaces, etc.), use as literal
                     if " " in part or not part.strip():
                         parts.append(part)
                         continue
@@ -194,7 +193,7 @@ class ExtendNode(Node):
                         val = get_value(item, part, default=MISSING)
                         parts.append(str(val) if val is not MISSING else part)
                     except ValueError:
-                        # Если путь невалиден с точки зрения синтаксиса — берем как строковый литерал
+                        # If path syntax is invalid, fall back to string literal
                         parts.append(part)
                 else:
                     parts.append(str(part))
@@ -214,7 +213,7 @@ class ExtendNode(Node):
                 new_item[field_name] = computed
                 yield new_item
             else:
-                # Если передан пользовательский объект — обогащаем его поверхностную копию
+                # For custom objects, enrich a shallow copy
                 import copy
                 new_obj = copy.copy(item)
                 setattr(new_obj, field_name, computed)
@@ -224,7 +223,7 @@ class ExtendNode(Node):
         return f"EXTEND: {self.field_name}"
 
 class RenameNode(Node):
-    """Стриминговое переименование полей в словарях или объектах."""
+    """Streaming renaming of fields in dictionaries or objects."""
 
     def __init__(self, parent: Node, mapping: Dict[str, str]) -> None:
         super().__init__(parent=parent)
@@ -258,7 +257,7 @@ class RenameNode(Node):
         return f"RENAME: {pairs}"
 
 class ZipNode(Node):
-    """Стриминговое спаривание элементов текущего потока с другим потоком."""
+    """Streaming pairing of elements from the current stream with another stream."""
 
     def __init__(self, parent: Node, other: Node) -> None:
         super().__init__(parent=parent)
@@ -278,8 +277,8 @@ class ZipNode(Node):
 
 class TapNode(Node):
     """
-    Стриминговое выполнение побочного действия (логирование/отладка)
-    над каждым элементом без изменения данных потока.
+    Streaming execution of a side effect (logging, debugging, metric collection)
+    for each element without mutating the stream items.
     """
 
     def __init__(self, parent: Node, action: Callable[[Any], None]) -> None:
@@ -301,12 +300,12 @@ class TapNode(Node):
         return f"TAP: {name}"
 
 class ChunkNode(Node):
-    """Стриминговая нарезка потока на пакеты заданного размера."""
+    """Streaming slicing of stream elements into fixed-size batches."""
 
     def __init__(self, parent: Node, size: int) -> None:
         super().__init__(parent=parent)
         if size <= 0:
-            raise ValueError("Размер чанка должен быть строго больше 0")
+            raise ValueError("Chunk size must be strictly greater than 0")
         self.size = size
 
     @property
@@ -329,12 +328,12 @@ class ChunkNode(Node):
 
 
 class WindowNode(Node):
-    """Стриминговое скользящее окно элементов."""
+    """Streaming sliding window over elements."""
 
     def __init__(self, parent: Node, size: int, step: int = 1) -> None:
         super().__init__(parent=parent)
         if size <= 0 or step <= 0:
-            raise ValueError("Размер окна и шаг должны быть больше 0")
+            raise ValueError("Window size and step must be greater than 0")
         self.size = size
         self.step = step
 
@@ -355,7 +354,7 @@ class WindowNode(Node):
         return f"WINDOW: size={self.size}, step={self.step}"
 
 class FlattenNode(Node):
-    """Разворачивание вложенных коллекций (или списков внутри указанного поля)."""
+    """Unrolls nested collections (or lists within a designated field)."""
 
     def __init__(self, parent: Node, field: Optional[str] = None) -> None:
         super().__init__(parent=parent)
@@ -393,7 +392,7 @@ class FlattenNode(Node):
 
 
 class FillNullNode(Node):
-    """Замена None или отсутствующих полей значениями по умолчанию."""
+    """Replaces None or missing values with defaults."""
 
     def __init__(self, parent: Node, defaults: Dict[str, Any]) -> None:
         super().__init__(parent=parent)
@@ -426,8 +425,8 @@ class FillNullNode(Node):
 
 class BranchNode(Node):
     """
-    Применяет if_true(item), если выполняется predicate(item),
-    иначе применяет if_false(item) (если передано).
+    Applies if_true(item) if predicate(item) evaluates to True,
+    otherwise applies if_false(item) (if provided).
     """
 
     def __init__(
@@ -461,8 +460,8 @@ class BranchNode(Node):
 
 class CatchNode(Node):
     """
-    Перехватывает исключения при вычислении элементов.
-    Позволяет подставить fallback-значение или пропустить сбойный элемент.
+    Intercepts exceptions during element evaluation.
+    Enables falling back to alternative values or gracefully skipping failing items.
     """
 
     def __init__(
@@ -482,8 +481,8 @@ class CatchNode(Node):
     def evaluate(self) -> Iterator[Any]:
         assert self.parent is not None
 
-        # Если родитель — MapNode, применяем func с защитой каждого вызова,
-        # чтобы ошибка не разрушала генератор итерации
+        # If parent is MapNode, apply func with call-level protection
+        # to ensure errors do not break the generator
         if isinstance(self.parent, MapNode):
             upstream = self.parent.parent.evaluate() if self.parent.parent else iter([])
             func = self.parent.func
@@ -497,7 +496,7 @@ class CatchNode(Node):
                             yield fallback
             return
 
-        # Общий случай для остальных типов узлов
+        # General case for other node types
         iterator = iter(self.parent.evaluate())
         while True:
             try:
@@ -518,7 +517,7 @@ class CatchNode(Node):
 
 
 class CompactNode(Node):
-    """Стриминговое отсеивание None значений."""
+    """Streaming filter removing None values."""
 
     def __init__(self, parent: Node) -> None:
         super().__init__(parent=parent)

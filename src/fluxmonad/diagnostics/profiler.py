@@ -32,8 +32,8 @@ class ProfileResult:
 
 
 def profile_pipeline(node: Node) -> ProfileResult:
-    """Выполняет пайплайн с телеметрией каждого узла."""
-    # Собираем линейную последовательность узлов
+    """Executes the pipeline while collecting telemetry for each node."""
+    # Collect linear chain of nodes
     nodes: List[Node] = []
     curr: Optional[Node] = node
     while curr is not None:
@@ -51,10 +51,10 @@ def profile_pipeline(node: Node) -> ProfileResult:
         step_start = time.perf_counter()
 
         if step_node.parent is None:
-            # Source узел
+            # Source node
             materialized = list(step_node.evaluate())
         else:
-            # Создаем временный узел с уже материализованным источником
+            # Create temporary node with pre-materialized source
             from fluxmonad.plan.source import SourceNode
             step_node.parent = SourceNode(current_data)
             materialized = list(step_node.evaluate())

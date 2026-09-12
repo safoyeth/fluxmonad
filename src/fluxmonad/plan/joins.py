@@ -7,8 +7,8 @@ from fluxmonad.plan.node import Node
 
 class JoinNode(Node):
     """
-    Узел объединения двух потоков данных (Hash Join).
-    Поддерживает: 'inner', 'left', 'right', 'full'.
+    Node for combining two data streams via Hash Join.
+    Supports join modes: 'inner', 'left', 'right', 'full'.
     """
 
     def __init__(
@@ -27,7 +27,7 @@ class JoinNode(Node):
 
         valid_modes = ("inner", "left", "right", "full")
         if self.how not in valid_modes:
-            raise ValueError(f"Поддерживаются типы join {valid_modes}, получено: {how}")
+            raise ValueError(f"Supported join types are {valid_modes}, got: {how}")
 
     @property
     def is_barrier(self) -> bool:
@@ -41,7 +41,7 @@ class JoinNode(Node):
     def evaluate(self) -> Iterator[Dict[str, Any]]:
         assert self.parent is not None
 
-        # Build phase: хэшируем правую сторону
+        # Build phase: hash the right-hand stream
         right_hash_table: collections.defaultdict[Any, List[Any]] = collections.defaultdict(list)
         matched_right_indices: Set[int] = set()
         indexed_right_records: List[Any] = []
@@ -53,7 +53,7 @@ class JoinNode(Node):
             indexed_right_records.append(r_item)
             right_idx += 1
 
-        # Probe phase: стримим левую сторону
+        # Probe phase: stream through the left-hand stream
         for l_item in self.parent.evaluate():
             l_key = self._extract_key(l_item, self.left_on)
             matches = right_hash_table.get(l_key, [])
@@ -97,7 +97,7 @@ class JoinNode(Node):
 
 
 class CrossJoinNode(Node):
-    """Декартово произведение двух потоков (Cartesian Product)."""
+    """Cartesian product of two data streams."""
 
     def __init__(self, left_parent: Node, right_parent: Node) -> None:
         super().__init__(parent=left_parent)
@@ -109,7 +109,7 @@ class CrossJoinNode(Node):
 
     def evaluate(self) -> Iterator[Dict[str, Any]]:
         assert self.parent is not None
-        # Материализуем правую сторону
+        # Materialize right side into memory
         right_items: List[Any] = list(self.right_parent.evaluate())
 
         for l_item in self.parent.evaluate():

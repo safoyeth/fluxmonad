@@ -10,7 +10,7 @@ def read_json_source(
     lines: bool = False,
     encoding: str = "utf-8",
 ) -> Iterator[Any]:
-    """Читает JSON-файл/строку (или JSON Lines при lines=True)."""
+    """Reads a JSON file/string (or JSON Lines when lines=True)."""
     target = Path(path_or_str) if isinstance(path_or_str, (str, Path)) and Path(path_or_str).is_file() else None
 
     if target:
@@ -27,7 +27,7 @@ def read_json_source(
                 else:
                     yield data
     else:
-        # Парсинг чистой строки
+        # Parsing raw string
         raw_str = str(path_or_str).strip()
         if lines:
             for line in raw_str.splitlines():
@@ -47,7 +47,7 @@ def read_csv_source(
     delimiter: str = ",",
     fieldnames: Optional[list[str]] = None,
 ) -> Iterator[Dict[str, Any]]:
-    """Потоково читает CSV в виде словарей."""
+    """Streams rows from a CSV file as dictionaries."""
     with open(filepath_or_buffer, mode="r", encoding=encoding, newline="") as f:
         reader = csv.DictReader(f, fieldnames=fieldnames, delimiter=delimiter)
         for row in reader:
@@ -55,11 +55,11 @@ def read_csv_source(
 
 
 def read_yaml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> Iterator[Any]:
-    """Читает YAML-источник (требуется PyYAML)."""
+    """Reads a YAML source into a stream (requires PyYAML)."""
     try:
         import yaml
     except ImportError:
-        raise ImportError("Для чтения YAML необходимо установить PyYAML: pip install pyyaml")
+        raise ImportError("Reading YAML requires PyYAML: pip install pyyaml")
 
     target = Path(path_or_str) if isinstance(path_or_str, (str, Path)) and Path(path_or_str).is_file() else None
     if target:
@@ -75,14 +75,14 @@ def read_yaml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> 
 
 
 def read_toml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> Dict[str, Any]:
-    """Читает TOML-источник (через tomllib из Python 3.11+ или tomli)."""
+    """Reads a TOML source (via tomllib on Python 3.11+ or tomli)."""
     if sys.version_info >= (3, 11):
         import tomllib
     else:
         try:
             import tomli as tomllib
         except ImportError:
-            raise ImportError("Для чтения TOML в Python < 3.11 требуется tomli: pip install tomli")
+            raise ImportError("Reading TOML on Python < 3.11 requires tomli: pip install tomli")
 
     target = Path(path_or_str) if isinstance(path_or_str, (str, Path)) and Path(path_or_str).is_file() else None
     if target:
@@ -92,7 +92,7 @@ def read_toml_source(path_or_str: Union[str, Path], encoding: str = "utf-8") -> 
 
 
 def read_pandas_source(df: Any) -> Iterator[Dict[str, Any]]:
-    """Лениво читает Pandas DataFrame построчно как словари."""
+    """Lazily reads a Pandas DataFrame row by row as dictionaries."""
     for record in df.to_dict(orient="records"):
         yield record
 
@@ -101,11 +101,11 @@ def read_excel_source(
     filepath: Union[str, Path],
     sheet_name: Union[str, int] = 0,
 ) -> Iterator[Dict[str, Any]]:
-    """Потоково читает строки таблицы Excel через openpyxl."""
+    """Streams rows from an Excel spreadsheet (.xlsx) via openpyxl."""
     try:
         import openpyxl
     except ImportError:
-        raise ImportError("Для чтения Excel (.xlsx) необходимо установить openpyxl: pip install openpyxl")
+        raise ImportError("Reading Excel (.xlsx) requires openpyxl: pip install openpyxl")
 
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     sheet = wb[sheet_name] if isinstance(sheet_name, str) else wb.worksheets[sheet_name]

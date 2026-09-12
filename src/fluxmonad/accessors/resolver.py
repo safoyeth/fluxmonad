@@ -7,7 +7,7 @@ MISSING = object()
 
 
 def resolve_step(obj: Any, token: str) -> Any:
-    """Извлекает один шаг пути из объекта (без рекурсии)."""
+    """Extracts a single path step from an object without recursion."""
     if obj is None:
         return MISSING
 
@@ -33,32 +33,32 @@ def resolve_step(obj: Any, token: str) -> Any:
 
 def find_deep_value(obj: Any, target_key: str) -> Any:
     """
-    Рекурсивно обходит структуру (DFS) и возвращает
-    первое найденное значение для target_key.
+    Recursively traverses the data structure (DFS) and returns
+    the first resolved value for target_key.
     """
     if obj is None:
         return MISSING
 
-    # 1. Проверяем текущий уровень
+    # 1. Check current level
     val = resolve_step(obj, target_key)
     if val is not MISSING:
         return val
 
-    # 2. Если словарь — спускаемся по значениям
+    # 2. If mapping — traverse values
     if isinstance(obj, Mapping):
         for v in obj.values():
             found = find_deep_value(v, target_key)
             if found is not MISSING:
                 return found
 
-    # 3. Если последовательность (список/кортеж) — спускаемся по элементам
+    # 3. If sequence (list/tuple) — traverse elements
     elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
         for item in obj:
             found = find_deep_value(item, target_key)
             if found is not MISSING:
                 return found
 
-    # 4. Если объект с __dict__ — обходим атрибуты
+    # 4. If object with __dict__ — traverse public attributes
     elif hasattr(obj, "__dict__"):
         for k, v in obj.__dict__.items():
             if not k.startswith("_"):
@@ -71,13 +71,13 @@ def find_deep_value(obj: Any, target_key: str) -> Any:
 
 def get_value(obj: Any, path: str, default: Any = MISSING) -> Any:
     """
-    Универсально извлекает значение из объекта по строковому пути.
-    Поддерживает явный синтаксис глубокого поиска: '..key' или 'path..key'.
+    Universally extracts a value from an object using a string path.
+    Supports deep search syntax: '..key' or 'path..key'.
     """
     if obj is None:
         return default
 
-    # Fast-path для простых ключей без вложенности и глубокого поиска
+    # Fast-path for simple keys without nesting or deep search
     if "." not in path:
         if isinstance(obj, dict):
             return obj.get(path, default)
@@ -105,5 +105,5 @@ def get_value(obj: Any, path: str, default: Any = MISSING) -> Any:
 
 
 def has_path(obj: Any, path: str) -> bool:
-    """Проверяет существование пути в объекте."""
+    """Checks whether the specified path exists within the object."""
     return bool(get_value(obj, path, default=MISSING) is not MISSING)

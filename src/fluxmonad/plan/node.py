@@ -3,7 +3,7 @@ from typing import Any, Iterator, Optional
 
 
 class Node(ABC):
-    """Базовый узел графа плана исполнения."""
+    """Base node of the execution plan graph."""
 
     def __init__(self, parent: Optional["Node"] = None) -> None:
         self.parent = parent
@@ -11,15 +11,15 @@ class Node(ABC):
     @property
     @abstractmethod
     def is_barrier(self) -> bool:
-        """Указывает, требует ли узел полной материализации предшествующего потока."""
+        """Indicates whether this node requires full materialization of the preceding stream."""
         pass
 
     @abstractmethod
     def evaluate(self) -> Iterator[Any]:
-        """Запускает ленивую итерацию по узлу."""
+        """Initiates lazy stream evaluation for this node."""
         pass
 
     @abstractmethod
     def explain_step(self) -> str:
-        """Возвращает строковое описание операции для explain()."""
+        """Returns a string description of the operation for explain()."""
         pass

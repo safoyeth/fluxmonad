@@ -4,7 +4,7 @@ from fluxmonad.plan.node import Node
 
 
 class SourceNode(Node):
-    """Начальный узел потока данных."""
+    """Initial node representing the incoming data stream."""
 
     def __init__(self, source: Any) -> None:
         super().__init__(parent=None)
@@ -17,8 +17,8 @@ class SourceNode(Node):
     def evaluate(self) -> Iterator[Any]:
         if inspect.isasyncgen(self.source) or hasattr(self.source, "__aiter__"):
             raise RuntimeError(
-                "Асинхронный источник нельзя выполнить через синхронный iter(). "
-                "Используйте 'async for item in flux' или 'await flux.collect_async()'."
+                "Cannot evaluate an asynchronous source using synchronous iter(). "
+                "Use 'async for item in flux' or 'await flux.collect_async()'."
             )
         if hasattr(self.source, "__iter__"):
             return iter(self.source)

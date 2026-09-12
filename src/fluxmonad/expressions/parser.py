@@ -29,14 +29,14 @@ class LambdaExpression(Expression):
 
     @property
     def referenced_fields(self) -> set[str]:
-        # Для скалярных функций над целым элементом зависимости от конкретных ключей словаря нет
+        # Scalar functions operating on the entire item have no explicit dictionary key dependencies
         return set()
 
 class Q:
     """
-    Декларативный строитель запросов в стиле Django ORM.
-    Поддерживает: Q(age__gte=18) | Q(role="admin")
-    или: Q(age__gte=18).or_(Q(role="admin"))
+    Declarative query builder inspired by Django ORM.
+    Supports: Q(age__gte=18) | Q(role="admin")
+    or: Q(age__gte=18).or_(Q(role="admin"))
     """
 
     def __init__(self, *args: Union[Expression, "Q"], **kwargs: Any) -> None:
@@ -47,13 +47,13 @@ class Q:
             elif isinstance(arg, Expression):
                 exprs.append(arg)
             else:
-                raise TypeError(f"Неподдерживаемый тип аргумента в Q: {type(arg)}")
+                raise TypeError(f"Unsupported argument type in Q: {type(arg)}")
 
         for k, v in kwargs.items():
             exprs.append(parse_lookup(k, v))
 
         if not exprs:
-            raise ValueError("Объект Q требует хотя бы одного аргумента или kwarg")
+            raise ValueError("Q object requires at least one argument or keyword argument")
 
         self.expr: Expression = exprs[0] if len(exprs) == 1 else And(*exprs)
 
@@ -77,11 +77,11 @@ class Q:
 
 def parse_lookup(key: str, value: Any) -> Expression:
     """
-    Разбирает пару key=value.
-    Примеры:
-      'age__gte' -> Gte('age', value)
+    Parses a key=value pair into an Expression.
+    Examples:
+      'age__gte'   -> Gte('age', value)
       'user__name' -> Eq('user.name', value)
-      'status' -> Eq('status', value)
+      'status'     -> Eq('status', value)
     """
     tokens = key.split("__")
 
@@ -109,13 +109,13 @@ def build_expression(
         elif callable(predicate):
             expressions.append(LambdaExpression(predicate))
         else:
-            raise TypeError(f"Предикат должен быть Callable, Expression или Q, получен: {type(predicate)}")
+            raise TypeError(f"Predicate must be Callable, Expression, or Q; got {type(predicate)}")
 
     for key, val in kwargs.items():
         expressions.append(parse_lookup(key, val))
 
     if not expressions:
-        raise ValueError("Для фильтрации не передано ни одного условия")
+        raise ValueError("No filter conditions provided")
 
     if len(expressions) == 1:
         return expressions[0]

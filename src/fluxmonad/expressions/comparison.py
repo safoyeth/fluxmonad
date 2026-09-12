@@ -13,7 +13,7 @@ class BinaryComparison(Expression):
     def referenced_fields(self) -> set[str]:
         fields: set[str] = set()
         
-        # Левая часть — это имя проверяемого поля
+        # Left side is the target field name
         if isinstance(self.left, str):
             fields.add(self.left.split(".")[0].strip())
         elif hasattr(self.left, "path"):
@@ -21,7 +21,7 @@ class BinaryComparison(Expression):
         elif hasattr(self.left, "name"):
             fields.add(str(self.left.name).split(".")[0].strip())
 
-        # Правую часть берем ТОЛЬКО если это объект Field (сравнение двух полей)
+        # Include right side ONLY if it is a Field object (field-to-field comparison)
         if hasattr(self.right, "path") and not isinstance(self.right, (str, bytes)):
             fields.add(str(self.right.path).split(".")[0].strip())
         elif hasattr(self.right, "name") and not isinstance(self.right, (str, bytes)):
@@ -47,7 +47,7 @@ class BinaryComparison(Expression):
         return f"{left_str} {self.op_str} {repr(self.right)}"
 
 
-# Все операторы вызывают super().__init__ или сохраняют left/right
+# All comparison operators delegate to super().__init__ with their operator string and function
 class Eq(BinaryComparison):
     def __init__(self, left: Any, right: Any) -> None:
         super().__init__(left, right, "==", lambda a, b: a == b)

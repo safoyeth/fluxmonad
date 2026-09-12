@@ -5,8 +5,8 @@ from fluxmonad.plan.node import Node
 
 class ParallelMapNode(Node):
     """
-    Параллельное применение функции к элементам потока.
-    backend: 'thread' (для сетевых/дисковых IO операций) или 'process' (для CPU-задач).
+    Parallel application of a function across stream elements.
+    backend: 'thread' (for network/disk IO operations) or 'process' (for CPU-bound tasks).
     """
 
     def __init__(
@@ -24,7 +24,7 @@ class ParallelMapNode(Node):
         self.backend = backend.lower()
 
         if self.backend not in ("thread", "process"):
-            raise ValueError(f"Поддерживаются только бэкенды 'thread' и 'process', получено: {backend}")
+            raise ValueError(f"Only 'thread' and 'process' backends are supported, got: {backend}")
 
     @property
     def is_barrier(self) -> bool:
