@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import functools
+from pathlib import Path
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, TypeVar, Union
 
 from fluxmonad.accessors import get_value
@@ -255,3 +256,77 @@ class Flux(Generic[T]):
         """
         cached_data = tuple(self)
         return Flux[T](cached_data)
+
+    # --- Фабричные методы создания (Data Ingestion) ---
+
+    @classmethod
+    def from_json(
+        cls,
+        path_or_str: Union[str, Any],
+        lines: bool = False,
+        encoding: str = "utf-8",
+    ) -> Flux[Any]:
+        """Создает Flux из JSON-файла, строки или JSON Lines."""
+        from fluxmonad.sources.loaders import read_json_source
+        return cls(read_json_source(path_or_str, lines=lines, encoding=encoding))
+
+    @classmethod
+    def from_csv(
+        cls,
+        filepath: Union[str, Any],
+        encoding: str = "utf-8",
+        delimiter: str = ",",
+    ) -> Flux[Dict[str, Any]]:
+        """Лениво читает CSV файл построчно в виде словарей."""
+        from fluxmonad.sources.loaders import read_csv_source
+        return cls(read_csv_source(filepath, encoding=encoding, delimiter=delimiter))
+
+    @classmethod
+    def from_yaml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
+        """Создает Flux из YAML-файла или строки."""
+        from fluxmonad.sources.loaders import read_yaml_source
+        return cls(read_yaml_source(path_or_str, encoding=encoding))
+
+    @classmethod
+    def from_toml(cls, path_or_str: Union[str, Any], encoding: str = "utf-8") -> Flux[Any]:
+        """Создает Flux из TOML документа (списка секций или словаря)."""
+        from fluxmonad.sources.loaders import read_toml_source
+        data = read_toml_source(path_or_str, encoding=encoding)
+        # Если TOML содержит корневой список или словарь
+        if isinstance(data, list):
+            return cls(data)
+        return cls([data])
+
+    @classmethod
+    def from_pandas(cls, df: Any) -> Flux[Dict[str, Any]]:
+        """Преобразует pandas.DataFrame в поток Flux словарей."""
+        from fluxmonad.sources.loaders import read_pandas_source
+        return cls(read_pandas_source(df))
+
+    @classmethod
+    def from_excel(
+        cls,
+        filepath: Union[str, Any],
+        sheet_name: Union[str, int] = 0,
+    ) -> Flux[Dict[str, Any]]:
+        """Читает лист Excel (.xlsx) построчно в виде словарей."""
+        from fluxmonad.sources.loaders import read_excel_source
+        return cls(read_excel_source(filepath, sheet_name=sheet_name))
+
+    @classmethod
+    def from_file(cls, filepath: Union[str, Any]) -> Flux[Any]:
+        """Умная фабрика: определяет формат по расширению файла."""
+        p = Path(filepath)
+        ext = p.suffix.lower()
+        if ext == ".csv":
+            return cls.from_csv(p)
+        elif ext in (".json", ".jsonl"):
+            return cls.from_json(p, lines=(ext == ".jsonl"))
+        elif ext in (".yaml", ".yml"):
+            return cls.from_yaml(p)
+        elif ext == ".toml":
+            return cls.from_toml(p)
+        elif ext in (".xlsx", ".xlsm"):
+            return cls.from_excel(p)
+        else:
+            raise ValueError(f"Неподдерживаемый формат файла: {ext}")
