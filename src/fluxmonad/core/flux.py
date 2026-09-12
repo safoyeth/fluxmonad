@@ -4,10 +4,11 @@ import collections
 import functools
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, TypeVar, Union
 
+from fluxmonad.accessors import get_value
 from fluxmonad.expressions.base import Expression
 from fluxmonad.expressions.parser import build_expression
 from fluxmonad.diagnostics.explainer import format_explain
-from fluxmonad.plan.barriers import Group, GroupByNode, SortNode
+from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.transforms import (
@@ -196,3 +197,52 @@ class Flux(Generic[T]):
         Возвращает Flux[Group], элементы которого содержат .key и .flux (подпоток элементов).
         """
         return Flux[Group[T]](GroupByNode(self._node, key_selector))
+
+    # --- Устранение дубликатов ---
+
+    def distinct(
+        self,
+        key_selector: Optional[Union[str, Callable[[T], Any]]] = None,
+    ) -> Flux[T]:
+        """Устраняет повторяющиеся элементы по значению или ключу."""
+        return Flux[T](DistinctNode(self._node, key_selector))
+
+    # --- Агрегационные терминальные операции ---
+
+    def sum(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Union[int, float]:
+        """Суммирует элементы или значения полей."""
+        total: Union[int, float] = 0
+        for item in self:
+            val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            if val is not None:
+                total += val
+        return total
+
+    def average(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
+        """Вычисляет среднее арифметическое элементов потока."""
+        total: Union[int, float] = 0
+        count = 0
+        for item in self:
+            val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            if val is not None:
+                total += val
+                count += 1
+        if count == 0:
+            raise ValueError("Невозможно вычислить average для пустого потока")
+        return total / count
+
+    def min(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
+        """Находит минимальный элемент."""
+        if selector is None:
+            return min(self)
+        if callable(selector):
+            return min(self, key=selector)
+        return min(self, key=lambda x: get_value(x, selector))
+
+    def max(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> T:
+        """Находит максимальный элемент."""
+        if selector is None:
+            return max(self)
+        if callable(selector):
+            return max(self, key=selector)
+        return max(self, key=lambda x: get_value(x, selector))

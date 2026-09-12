@@ -1,4 +1,16 @@
-from typing import Any, Callable, Iterator, List, Sequence, Tuple, Union, DefaultDict, Generic, TypeVar, TYPE_CHECKING
+from typing import (
+    Any, 
+    Callable, 
+    Iterator, 
+    List, 
+    Optional, 
+    Sequence, 
+    Tuple, 
+    Union, 
+    DefaultDict, 
+    Generic, 
+    TypeVar, 
+    TYPE_CHECKING)
 from fluxmonad.accessors import MISSING, get_value
 from fluxmonad.plan.node import Node
 import collections
@@ -157,3 +169,53 @@ class GroupByNode(Node):
     def explain_step(self) -> str:
         name = getattr(self.key_selector, "__name__", str(self.key_selector))
         return f"GROUPBY: {name} (barrier=True)"
+
+class DistinctNode(Node):
+    """
+    Барьерный узел устранения дубликатов.
+    Поддерживает селектор ключа: .distinct('id') или .distinct(lambda x: x.email).
+    """
+
+    def __init__(
+        self,
+        parent: Node,
+        key_selector: Optional[Union[str, Callable[[Any], Any]]] = None,
+    ) -> None:
+        super().__init__(parent=parent)
+        self.key_selector = key_selector
+
+    @property
+    def is_barrier(self) -> bool:
+        return True
+
+    def _get_key(self, item: Any) -> Any:
+        if self.key_selector is None:
+            return item
+        if callable(self.key_selector):
+            return self.key_selector(item)
+        if isinstance(self.key_selector, str):
+            return get_value(item, self.key_selector, default=None)
+        raise TypeError(f"Селектор ключа должен быть строкой или callable: {type(self.key_selector)}")
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        seen_keys = set()
+        seen_unhashable: List[Any] = []
+
+        for item in self.parent.evaluate():
+            key = self._get_key(item)
+            try:
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                yield item
+            except TypeError:
+                # Fallback для нехешируемых объектов (словари, списки)
+                if key in seen_unhashable:
+                    continue
+                seen_unhashable.append(key)
+                yield item
+
+    def explain_step(self) -> str:
+        key_name = getattr(self.key_selector, "__name__", str(self.key_selector)) if self.key_selector else "identity"
+        return f"DISTINCT: {key_name} (barrier=True)"

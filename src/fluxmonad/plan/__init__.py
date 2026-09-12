@@ -1,4 +1,4 @@
-from fluxmonad.plan.barriers import Group, GroupByNode, SortNode
+from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.transforms import (
@@ -24,4 +24,5 @@ __all__ = [
     "Group",
     "GroupByNode",
     "SortNode",
+    "DistinctNode",
 ]
