@@ -31,7 +31,13 @@ from fluxmonad.plan.transforms import (
     WindowNode
 )
 from fluxmonad.core.types import alias_for
-from fluxmonad.sources.writers import write_csv, write_json #, write_yaml, write_toml, write_excel
+from fluxmonad.sources.writers import (
+    write_csv,
+    write_excel,
+    write_json,
+    write_toml,
+    write_yaml,
+)
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -728,3 +734,75 @@ class Flux(Generic[T]):
     @alias_for(to_csv)
     def toCsv(self, filepath: Union[str, Any], delimiter: str = ",") -> None:
         self.to_csv(filepath, delimiter=delimiter)
+
+    # --- Запись YAML ---
+
+    def to_yaml(self, filepath: Union[str, Any], encoding: str = "utf-8") -> None:
+        """Сохраняет элементы потока в YAML-файл."""
+        write_yaml(self, filepath, encoding=encoding)
+
+    @alias_for(to_yaml)
+    def toYaml(self, filepath: Union[str, Any], encoding: str = "utf-8") -> None:
+        self.to_yaml(filepath, encoding=encoding)
+
+    # --- Запись TOML ---
+
+    def to_toml(
+        self,
+        filepath: Union[str, Any],
+        root_key: str = "items",
+        encoding: str = "utf-8",
+    ) -> None:
+        """Сохраняет элементы потока в TOML-файл."""
+        write_toml(self, filepath, root_key=root_key, encoding=encoding)
+
+    @alias_for(to_toml)
+    def toToml(
+        self,
+        filepath: Union[str, Any],
+        root_key: str = "items",
+        encoding: str = "utf-8",
+    ) -> None:
+        self.to_toml(filepath, root_key=root_key, encoding=encoding)
+
+    # --- Запись Excel ---
+
+    def to_excel(
+        self,
+        filepath: Union[str, Any],
+        sheet_name: str = "Sheet1",
+    ) -> None:
+        """Сохраняет элементы потока в таблицу Excel (.xlsx)."""
+        write_excel(self, filepath, sheet_name=sheet_name)
+
+    @alias_for(to_excel)
+    def toExcel(
+        self,
+        filepath: Union[str, Any],
+        sheet_name: str = "Sheet1",
+    ) -> None:
+        self.to_excel(filepath, sheet_name=sheet_name)
+
+    # --- Умный метод сохранения по расширению ---
+
+    def to_file(self, filepath: Union[str, Any], **kwargs: Any) -> None:
+        """Автоматически определяет формат по расширению файла и выполняет экспорт."""
+        p = Path(filepath)
+        ext = p.suffix.lower()
+        if ext == ".csv":
+            self.to_csv(p, **kwargs)
+        elif ext in (".json", ".jsonl"):
+            lines = kwargs.pop("lines", ext == ".jsonl")
+            self.to_json(p, lines=lines, **kwargs)
+        elif ext in (".yaml", ".yml"):
+            self.to_yaml(p, **kwargs)
+        elif ext == ".toml":
+            self.to_toml(p, **kwargs)
+        elif ext in (".xlsx", ".xlsm"):
+            self.to_excel(p, **kwargs)
+        else:
+            raise ValueError(f"Неподдерживаемый формат для сохранения: {ext}")
+
+    @alias_for(to_file)
+    def toFile(self, filepath: Union[str, Any], **kwargs: Any) -> None:
+        self.to_file(filepath, **kwargs)
