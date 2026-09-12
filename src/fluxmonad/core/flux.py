@@ -40,7 +40,12 @@ class Flux(Generic[T]):
             self._node = SourceNode(source_or_node)
 
     def __iter__(self) -> Iterator[T]:
-        return iter(self._node.evaluate())
+        """
+        Ленивая итерация по результатам пайплайна.
+        Перед выполнением граф автоматически оптимизируется.
+        """
+        optimized_node = PlanOptimizer.optimize(self._node)
+        return iter(optimized_node.evaluate())
 
     # --- Функциональный API ---
 
@@ -190,9 +195,13 @@ class Flux(Generic[T]):
 
     # --- Диагностика ---
 
-    def explain(self) -> str:
-        """Диагностический API: возвращает строковое представление плана вычислений."""
-        return format_explain(self._node)
+    def explain(self, optimized: bool = False) -> str:
+        """
+        Диагностический API: возвращает строковое представление плана вычислений.
+        При optimized=True возвращает граф после применения оптимизатора.
+        """
+        target_node = PlanOptimizer.optimize(self._node) if optimized else self._node
+        return format_explain(target_node)
 
     # --- Группировка ---
 
