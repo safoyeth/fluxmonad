@@ -35,7 +35,7 @@ Measured with Python `tracemalloc` and `time.perf_counter` across 1,000,000 reco
 | **Full Stream Reduction** <br> `Sum over 1,000,000 rows` | 2.7208s | 2.8061s | 0.00 MB vs 0.01 MB | $O(1)$ memory consumption |
 
 ---
-
+<!--
 ## 📦 Installation
 
 ```bash
@@ -47,7 +47,7 @@ To enable support for YAML, Excel, and TOML:
 ```bash
 pip install "fluxmonad[all]"
 ```
-
+-->
 ---
 
 ## ⚡ Quick Start
