@@ -1,6 +1,7 @@
 from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
+from fluxmonad.plan.joins import JoinNode
 from fluxmonad.plan.transforms import (
     BindNode,
     ExcludeNode,
@@ -26,5 +27,6 @@ __all__ = [
     "GroupByNode",
     "SortNode",
     "DistinctNode",
-    "ExtendNode"
+    "ExtendNode",
+    "JoinNode"
 ]

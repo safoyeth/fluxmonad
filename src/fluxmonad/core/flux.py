@@ -12,6 +12,8 @@ from fluxmonad.diagnostics.explainer import format_explain
 from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
+from fluxmonad.plan.joins import JoinNode
+from fluxmonad.plan.optimizer import PlanOptimizer
 from fluxmonad.plan.transforms import (
     BindNode,
     ExcludeNode,
@@ -267,6 +269,70 @@ class Flux(Generic[T]):
         rule может быть callable, списком компонентов для склейки или константой.
         """
         return Flux[Dict[str, Any]](ExtendNode(self._node, field_name, rule))
+
+    # --- Реляционные операции (Joins) ---
+
+    def join(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+        how: str = "inner",
+    ) -> Flux[Dict[str, Any]]:
+        """
+        Реляционное объединение с другим Flux по указанным ключам.
+        how: 'inner' или 'left'.
+        """
+        return Flux[Dict[str, Any]](
+            JoinNode(
+                left_parent=self._node,
+                right_parent=other._node,
+                left_on=left_on,
+                right_on=right_on,
+                how=how,
+            )
+        )
+
+    def inner_join(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        """Алиас для внутреннего объединения (inner join)."""
+        return self.join(other, left_on=left_on, right_on=right_on, how="inner")
+
+    def innerJoin(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        return self.inner_join(other, left_on, right_on)
+
+    def left_join(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        """Алиас для левого объединения (left join)."""
+        return self.join(other, left_on=left_on, right_on=right_on, how="left")
+
+    def leftJoin(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        return self.left_join(other, left_on, right_on)
+
+    # --- Оптимизация плана ---
+
+    def optimize(self) -> Flux[T]:
+        """Оптимизирует текущий граф вычислений и возвращает оптимизированный Flux."""
+        optimized_node = PlanOptimizer.optimize(self._node)
+        return Flux[T](optimized_node)
 
     # --- Фабричные методы создания (Data Ingestion) ---
 
