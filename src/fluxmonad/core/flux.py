@@ -26,9 +26,12 @@ from fluxmonad.plan.transforms import (
     ExtendNode,
     RenameNode,
     ZipNode,
-    TapNode
+    TapNode,
+    ChunkNode,
+    WindowNode
 )
 from fluxmonad.core.types import alias_for
+from fluxmonad.sources.writers import write_csv, write_json #, write_yaml, write_toml, write_excel
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -676,3 +679,52 @@ class Flux(Generic[T]):
         matching = mat.when(expr)
         not_matching = mat.when(~expr)
         return matching, not_matching
+
+    # --- Пакетирование и окна ---
+
+    def chunk(self, size: int) -> Flux[List[T]]:
+        """Разбивает поток на непересекающиеся списки размера size."""
+        return Flux[List[T]](ChunkNode(self._node, size))
+
+    @alias_for(chunk)
+    def batch(self, size: int) -> Flux[List[T]]:
+        return self.chunk(size)
+
+    def window(self, size: int, step: int = 1) -> Flux[List[T]]:
+        """Формирует скользящее окно размера size с шагом step."""
+        return Flux[List[T]](WindowNode(self._node, size, step))
+
+    # --- Приведение типов ---
+
+    def cast(self, target_type: Callable[[Any], R]) -> Flux[R]:
+        """Приводит каждый элемент к указанному типу (например, dataclass, Pydantic модель, int)."""
+        return self.map(target_type)
+
+    # --- Терминальный экспорт (Data Egress) ---
+
+    def to_json(
+        self,
+        filepath: Union[str, Any],
+        lines: bool = False,
+        indent: int = 2,
+        encoding: str = "utf-8",
+    ) -> None:
+        """Сохраняет элементы потока в JSON или JSON Lines."""
+        write_json(self, filepath, lines=lines, indent=indent, encoding=encoding)
+
+    @alias_for(to_json)
+    def toJson(self, filepath: Union[str, Any], lines: bool = False, indent: int = 2) -> None:
+        self.to_json(filepath, lines=lines, indent=indent)
+
+    def to_csv(
+        self,
+        filepath: Union[str, Any],
+        delimiter: str = ",",
+        encoding: str = "utf-8",
+    ) -> None:
+        """Сохраняет элементы потока в CSV."""
+        write_csv(self, filepath, delimiter=delimiter, encoding=encoding)
+
+    @alias_for(to_csv)
+    def toCsv(self, filepath: Union[str, Any], delimiter: str = ",") -> None:
+        self.to_csv(filepath, delimiter=delimiter)

@@ -1,5 +1,6 @@
 import itertools
-from typing import Any, Callable, Dict, Iterator, Tuple
+import collections
+from typing import Any, Callable, Dict, Iterator, Tuple, Deque, List
 
 from typing import Any, Callable, Iterator, Sequence, Union
 from fluxmonad.accessors import project_exclude, project_select
@@ -294,3 +295,57 @@ class TapNode(Node):
     def explain_step(self) -> str:
         name = getattr(self.action, "__name__", str(self.action))
         return f"TAP: {name}"
+
+class ChunkNode(Node):
+    """Стриминговая нарезка потока на пакеты заданного размера."""
+
+    def __init__(self, parent: Node, size: int) -> None:
+        super().__init__(parent=parent)
+        if size <= 0:
+            raise ValueError("Размер чанка должен быть строго больше 0")
+        self.size = size
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[List[Any]]:
+        assert self.parent is not None
+        batch: List[Any] = []
+        for item in self.parent.evaluate():
+            batch.append(item)
+            if len(batch) == self.size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+    def explain_step(self) -> str:
+        return f"CHUNK: {self.size}"
+
+
+class WindowNode(Node):
+    """Стриминговое скользящее окно элементов."""
+
+    def __init__(self, parent: Node, size: int, step: int = 1) -> None:
+        super().__init__(parent=parent)
+        if size <= 0 or step <= 0:
+            raise ValueError("Размер окна и шаг должны быть больше 0")
+        self.size = size
+        self.step = step
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[List[Any]]:
+        assert self.parent is not None
+        buffer: List[Any] = []
+        for item in self.parent.evaluate():
+            buffer.append(item)
+            if len(buffer) == self.size:
+                yield list(buffer)
+                buffer = buffer[self.step:]
+
+    def explain_step(self) -> str:
+        return f"WINDOW: size={self.size}, step={self.step}"

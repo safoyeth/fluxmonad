@@ -20,7 +20,9 @@ from fluxmonad.plan.transforms import (
     ExtendNode,
     RenameNode,
     ZipNode,
-    TapNode
+    TapNode,
+    ChunkNode,
+    WindowNode
 )
 
 __all__ = [
@@ -46,5 +48,7 @@ __all__ = [
     "RenameNode",
     "ReverseNode",
     "ZipNode",
-    "TapNode"
+    "TapNode",
+    "ChunkNode",
+    "WindowNode"
 ]
