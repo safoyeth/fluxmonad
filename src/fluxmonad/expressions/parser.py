@@ -28,6 +28,48 @@ class LambdaExpression(Expression):
     def explain(self) -> str:
         return getattr(self.predicate, "__name__", str(self.predicate))
 
+class Q:
+    """
+    Декларативный строитель запросов в стиле Django ORM.
+    Поддерживает: Q(age__gte=18) | Q(role="admin")
+    или: Q(age__gte=18).or_(Q(role="admin"))
+    """
+
+    def __init__(self, *args: Union[Expression, "Q"], **kwargs: Any) -> None:
+        exprs: list[Expression] = []
+        for arg in args:
+            if isinstance(arg, Q):
+                exprs.append(arg.expr)
+            elif isinstance(arg, Expression):
+                exprs.append(arg)
+            else:
+                raise TypeError(f"Неподдерживаемый тип аргумента в Q: {type(arg)}")
+
+        for k, v in kwargs.items():
+            exprs.append(parse_lookup(k, v))
+
+        if not exprs:
+            raise ValueError("Объект Q требует хотя бы одного аргумента или kwarg")
+
+        self.expr: Expression = exprs[0] if len(exprs) == 1 else And(*exprs)
+
+    def __or__(self, other: Union["Q", Expression]) -> "Q":
+        other_expr = other.expr if isinstance(other, Q) else other
+        return Q(self.expr | other_expr)
+
+    def __and__(self, other: Union["Q", Expression]) -> "Q":
+        other_expr = other.expr if isinstance(other, Q) else other
+        return Q(self.expr & other_expr)
+
+    def __invert__(self) -> "Q":
+        return Q(~self.expr)
+
+    def or_(self, other: Union["Q", Expression]) -> "Q":
+        return self | other
+
+    def and_(self, other: Union["Q", Expression]) -> "Q":
+        return self & other
+
 
 def parse_lookup(key: str, value: Any) -> Expression:
     """
@@ -50,19 +92,20 @@ def parse_lookup(key: str, value: Any) -> Expression:
 
 
 def build_expression(
-    predicate: Union[None, Callable[[Any], bool], Expression] = None,
+    predicate: Union[None, Callable[[Any], bool], Expression, Q] = None,
     **kwargs: Any,
 ) -> Expression:
-    """Объединяет позиционный предикат/Expression и именованные kwargs через And."""
     expressions: list[Expression] = []
 
     if predicate is not None:
-        if isinstance(predicate, Expression):
+        if isinstance(predicate, Q):
+            expressions.append(predicate.expr)
+        elif isinstance(predicate, Expression):
             expressions.append(predicate)
         elif callable(predicate):
             expressions.append(LambdaExpression(predicate))
         else:
-            raise TypeError(f"Предикат должен быть Callable или Expression, получен: {type(predicate)}")
+            raise TypeError(f"Предикат должен быть Callable, Expression или Q, получен: {type(predicate)}")
 
     for key, val in kwargs.items():
         expressions.append(parse_lookup(key, val))

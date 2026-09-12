@@ -26,3 +26,13 @@ class Expression(ABC):
     def __invert__(self) -> "Expression":
         from fluxmonad.expressions.logical import Not
         return Not(self)
+
+    def and_(self, other: "Expression") -> "Expression":
+        """Логическое И (словесный метод)."""
+        from fluxmonad.expressions.logical import And
+        return And(self, other)
+
+    def or_(self, other: "Expression") -> "Expression":
+        """Логическое ИЛИ (словесный метод)."""
+        from fluxmonad.expressions.logical import Or
+        return Or(self, other)

@@ -43,3 +43,17 @@ class Not(Expression):
 
     def explain(self) -> str:
         return f"NOT ({self.expression.explain()})"
+
+def and_(*expressions: Expression) -> Expression:
+    """Объединяет выражения через логическое И: and_(expr1, expr2)."""
+    return And(*expressions)
+
+
+def or_(*expressions: Expression) -> Expression:
+    """Объединяет выражения через логическое ИЛИ: or_(expr1, expr2)."""
+    return Or(*expressions)
+
+
+def not_(expression: Expression) -> Expression:
+    """Инвертирует выражение: not_(expr)."""
+    return Not(expression)
