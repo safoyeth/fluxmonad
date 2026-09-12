@@ -6,7 +6,8 @@ from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optio
 
 from fluxmonad.expressions.base import Expression
 from fluxmonad.expressions.parser import build_expression
-from fluxmonad.plan.barriers import SortNode
+from fluxmonad.diagnostics.explainer import format_explain
+from fluxmonad.plan.barriers import Group, GroupByNode, SortNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.transforms import (
@@ -180,3 +181,18 @@ class Flux(Generic[T]):
         if initial:
             return functools.reduce(function, self, initial[0])
         return functools.reduce(function, self)
+
+    # --- Диагностика ---
+
+    def explain(self) -> str:
+        """Диагностический API: возвращает строковое представление плана вычислений."""
+        return format_explain(self._node)
+
+    # --- Группировка ---
+
+    def groupby(self, key_selector: Union[str, Callable[[T], Any]]) -> Flux[Group[T]]:
+        """
+        Барьерная группировка элементов.
+        Возвращает Flux[Group], элементы которого содержат .key и .flux (подпоток элементов).
+        """
+        return Flux[Group[T]](GroupByNode(self._node, key_selector))

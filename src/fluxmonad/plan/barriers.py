@@ -1,7 +1,11 @@
-from typing import Any, Callable, Iterator, List, Sequence, Tuple, Union
+from typing import Any, Callable, Iterator, List, Sequence, Tuple, Union, DefaultDict, Generic, TypeVar, TYPE_CHECKING
 from fluxmonad.accessors import MISSING, get_value
 from fluxmonad.plan.node import Node
+import collections
+if TYPE_CHECKING:
+    from fluxmonad.core.flux import Flux
 
+T = TypeVar("T")
 
 class _ComparableWrapper:
     """Обертка для безопасного сравнения значений с поддержкой DESC-направления."""
@@ -91,3 +95,65 @@ class SortNode(Node):
             getattr(k, "__name__", str(k)) for k in self.keys
         ) or "natural"
         return f"SORT: {keys_str} (barrier=True)"
+
+
+class Group(Generic[T]):
+    """Контейнер отдельной группы данных с доступом к ключу и элементам в виде Flux."""
+
+    __slots__ = ("key", "values")
+
+    def __init__(self, key: Any, values: List[T]) -> None:
+        self.key = key
+        self.values = values
+
+    @property
+    def flux(self) -> "Flux[T]":
+        from fluxmonad.core.flux import Flux
+        return Flux[T](self.values)
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self.values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    def __repr__(self) -> str:
+        return f"Group(key={repr(self.key)}, count={len(self.values)})"
+
+
+class GroupByNode(Node):
+    """
+    Барьерный узел группировки элементов по ключу.
+    Эмитит объекты Group(key, values).
+    """
+
+    def __init__(self, parent: Node, key_selector: Union[str, Callable[[Any], Any]]) -> None:
+        super().__init__(parent=parent)
+        self.key_selector = key_selector
+
+    @property
+    def is_barrier(self) -> bool:
+        return True
+
+    def _extract_key(self, item: Any) -> Any:
+        if callable(self.key_selector):
+            return self.key_selector(item)
+        if isinstance(self.key_selector, str):
+            return get_value(item, self.key_selector, default=None)
+        raise TypeError(f"Селектор ключа должен быть строкой или callable: {type(self.key_selector)}")
+
+    def evaluate(self) -> Iterator[Group]:
+        assert self.parent is not None
+        groups: DefaultDict[Any, List[Any]] = collections.defaultdict(list)
+
+        # Барьер: материализуем входящие данные в группы с сохранением порядка появления
+        for item in self.parent.evaluate():
+            k = self._extract_key(item)
+            groups[k].append(item)
+
+        for key, items in groups.items():
+            yield Group(key=key, values=items)
+
+    def explain_step(self) -> str:
+        name = getattr(self.key_selector, "__name__", str(self.key_selector))
+        return f"GROUPBY: {name} (barrier=True)"
