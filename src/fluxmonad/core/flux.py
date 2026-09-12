@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import functools
+import statistics
 from pathlib import Path
 from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union
 
@@ -30,6 +31,7 @@ from fluxmonad.plan.transforms import (
     ChunkNode,
     WindowNode
 )
+from fluxmonad.plan.analytics import CumulativeSumNode, EnumerateNode, LagLeadNode
 from fluxmonad.core.types import alias_for
 from fluxmonad.sources.writers import (
     write_csv,
@@ -806,3 +808,85 @@ class Flux(Generic[T]):
     @alias_for(to_file)
     def toFile(self, filepath: Union[str, Any], **kwargs: Any) -> None:
         self.to_file(filepath, **kwargs)
+
+    # --- Аналитика последовательностей ---
+
+    def enumerate(self, start: int = 0, field: Optional[str] = None) -> Flux[Any]:
+        """
+        Нумерует записи потока.
+        Если field указан — добавляет поле с номером в словарь/объект.
+        Если field=None — возвращает поток кортежей (индекс, элемент).
+        """
+        return Flux[Any](EnumerateNode(self._node, start=start, field=field))
+
+    def cumulative_sum(self, field: str, target_field: Optional[str] = None) -> Flux[Dict[str, Any]]:
+        """Вычисляет нарастающий итог по указанному числовому полю."""
+        return Flux[Dict[str, Any]](CumulativeSumNode(self._node, field, target_field))
+
+    @alias_for(cumulative_sum)
+    def cumulativeSum(self, field: str, target_field: Optional[str] = None) -> Flux[Dict[str, Any]]:
+        return self.cumulative_sum(field, target_field)
+
+    @alias_for(cumulative_sum)
+    def running_sum(self, field: str, target_field: Optional[str] = None) -> Flux[Dict[str, Any]]:
+        return self.cumulative_sum(field, target_field)
+
+    def lag(
+        self,
+        field: str,
+        offset: int = 1,
+        target_field: Optional[str] = None,
+        default: Any = None,
+    ) -> Flux[Dict[str, Any]]:
+        """Добавляет в запись значение поля из предыдущей записи (со смещением offset)."""
+        return Flux[Dict[str, Any]](
+            LagLeadNode(self._node, field, offset=offset, target_field=target_field, default=default, is_lead=False)
+        )
+
+    def lead(
+        self,
+        field: str,
+        offset: int = 1,
+        target_field: Optional[str] = None,
+        default: Any = None,
+    ) -> Flux[Dict[str, Any]]:
+        """Добавляет в запись значение поля из следующей записи (со смещением offset)."""
+        return Flux[Dict[str, Any]](
+            LagLeadNode(self._node, field, offset=offset, target_field=target_field, default=default, is_lead=True)
+        )
+
+    # --- Статистические терминальные метрики ---
+
+    def median(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
+        """Вычисляет медиану потока."""
+        vals = [
+            get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            for item in self
+        ]
+        if not vals:
+            raise ValueError("Медиана не может быть вычислена для пустого потока")
+        return float(statistics.median(vals))
+
+    def mode(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Any:
+        """Вычисляет моду (наиболее часто встречающийся элемент)."""
+        vals = [
+            get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            for item in self
+        ]
+        if not vals:
+            raise ValueError("Мода не может быть вычислена для пустого потока")
+        return statistics.mode(vals)
+
+    def std_dev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
+        """Вычисляет выборочное стандартное отклонение."""
+        vals = [
+            get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            for item in self
+        ]
+        if len(vals) < 2:
+            raise ValueError("Стандартное отклонение требует как минимум двух значений")
+        return float(statistics.stdev(vals))
+
+    @alias_for(std_dev)
+    def stdDev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
+        return self.std_dev(selector)

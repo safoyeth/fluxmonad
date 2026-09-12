@@ -24,6 +24,11 @@ from fluxmonad.plan.transforms import (
     ChunkNode,
     WindowNode
 )
+from fluxmonad.plan.analytics import (
+    EnumerateNode, 
+    CumulativeSumNode, 
+    LagLeadNode
+)
 
 __all__ = [
     "Node",
@@ -50,5 +55,8 @@ __all__ = [
     "ZipNode",
     "TapNode",
     "ChunkNode",
-    "WindowNode"
+    "WindowNode",
+    "EnumerateNode",
+    "CumulativeSumNode",
+    "LagLeadNode"
 ]
