@@ -12,7 +12,7 @@ from fluxmonad.diagnostics.explainer import format_explain
 from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode, ReverseNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
-from fluxmonad.plan.joins import JoinNode
+from fluxmonad.plan.joins import JoinNode, CrossJoinNode
 from fluxmonad.plan.optimizer import PlanOptimizer
 from fluxmonad.plan.sets import DifferenceNode, IntersectionNode, UnionNode
 from fluxmonad.plan.transforms import (
@@ -339,6 +339,52 @@ class Flux(Generic[T]):
         right_on: Union[str, Callable[[Any], Any]],
     ) -> Flux[Dict[str, Any]]:
         return self.left_join(other, left_on, right_on)
+
+    # --- Новые методы Join ---
+
+    def right_join(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        """Правое внешнее объединение (right outer join)."""
+        return self.join(other, left_on=left_on, right_on=right_on, how="right")
+
+    @alias_for(right_join)
+    def rightJoin(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        return self.right_join(other, left_on, right_on)
+
+    def full_join(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        """Полное внешнее объединение (full outer join)."""
+        return self.join(other, left_on=left_on, right_on=right_on, how="full")
+
+    @alias_for(full_join)
+    def fullJoin(
+        self,
+        other: Flux[Any],
+        left_on: Union[str, Callable[[T], Any]],
+        right_on: Union[str, Callable[[Any], Any]],
+    ) -> Flux[Dict[str, Any]]:
+        return self.full_join(other, left_on, right_on)
+
+    def cross_join(self, other: Flux[Any]) -> Flux[Dict[str, Any]]:
+        """Декартово произведение двух потоков (cross join)."""
+        return Flux[Dict[str, Any]](CrossJoinNode(self._node, other._node))
+
+    @alias_for(cross_join)
+    def crossJoin(self, other: Flux[Any]) -> Flux[Dict[str, Any]]:
+        return self.cross_join(other)
 
     # --- Оптимизация плана ---
 

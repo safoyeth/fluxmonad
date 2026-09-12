@@ -1,5 +1,5 @@
 import collections
-from typing import Any, Callable, Dict, Iterator, List, Optional, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Union
 
 from fluxmonad.accessors import get_value
 from fluxmonad.plan.node import Node
@@ -8,7 +8,7 @@ from fluxmonad.plan.node import Node
 class JoinNode(Node):
     """
     Узел объединения двух потоков данных (Hash Join).
-    Поддерживает inner и left outer join.
+    Поддерживает: 'inner', 'left', 'right', 'full'.
     """
 
     def __init__(
@@ -25,12 +25,12 @@ class JoinNode(Node):
         self.right_on = right_on
         self.how = how.lower()
 
-        if self.how not in ("inner", "left"):
-            raise ValueError(f"Поддерживаются только типы join 'inner' и 'left', получено: {how}")
+        valid_modes = ("inner", "left", "right", "full")
+        if self.how not in valid_modes:
+            raise ValueError(f"Поддерживаются типы join {valid_modes}, получено: {how}")
 
     @property
     def is_barrier(self) -> bool:
-        # Правая сторона материализуется в хэш-таблицу
         return True
 
     def _extract_key(self, item: Any, selector: Union[str, Callable[[Any], Any]]) -> Any:
@@ -41,32 +41,46 @@ class JoinNode(Node):
     def evaluate(self) -> Iterator[Dict[str, Any]]:
         assert self.parent is not None
 
-        # 1. Построение хэш-таблицы по правой стороне (Build phase)
+        # Build phase: хэшируем правую сторону
         right_hash_table: collections.defaultdict[Any, List[Any]] = collections.defaultdict(list)
+        matched_right_indices: Set[int] = set()
+        indexed_right_records: List[Any] = []
+
+        right_idx = 0
         for r_item in self.right_parent.evaluate():
             r_key = self._extract_key(r_item, self.right_on)
-            right_hash_table[r_key].append(r_item)
+            right_hash_table[r_key].append((right_idx, r_item))
+            indexed_right_records.append(r_item)
+            right_idx += 1
 
-        # 2. Потоковый проход по левой стороне (Probe phase)
+        # Probe phase: стримим левую сторону
         for l_item in self.parent.evaluate():
             l_key = self._extract_key(l_item, self.left_on)
             matches = right_hash_table.get(l_key, [])
 
             if matches:
-                for match in matches:
-                    yield self._merge_records(l_item, match)
-            elif self.how == "left":
+                for r_idx, r_match in matches:
+                    matched_right_indices.add(r_idx)
+                    yield self._merge_records(l_item, r_match)
+            elif self.how in ("left", "full"):
                 yield self._merge_records(l_item, None)
 
-    def _merge_records(self, left_item: Any, right_item: Optional[Any]) -> Dict[str, Any]:
+        # Emit unmatched right records for right & full outer joins
+        if self.how in ("right", "full"):
+            for idx, r_item in enumerate(indexed_right_records):
+                if idx not in matched_right_indices:
+                    yield self._merge_records(None, r_item)
+
+    def _merge_records(self, left_item: Optional[Any], right_item: Optional[Any]) -> Dict[str, Any]:
         merged: Dict[str, Any] = {}
 
-        if isinstance(left_item, dict):
-            merged.update(left_item)
-        elif hasattr(left_item, "__dict__"):
-            merged.update({k: v for k, v in left_item.__dict__.items() if not k.startswith("_")})
-        else:
-            merged["left"] = left_item
+        if left_item is not None:
+            if isinstance(left_item, dict):
+                merged.update(left_item)
+            elif hasattr(left_item, "__dict__"):
+                merged.update({k: v for k, v in left_item.__dict__.items() if not k.startswith("_")})
+            else:
+                merged["left"] = left_item
 
         if right_item is not None:
             if isinstance(right_item, dict):
@@ -80,3 +94,37 @@ class JoinNode(Node):
 
     def explain_step(self) -> str:
         return f"JOIN ({self.how.upper()}): left_on={self.left_on}, right_on={self.right_on} (barrier=True)"
+
+
+class CrossJoinNode(Node):
+    """Декартово произведение двух потоков (Cartesian Product)."""
+
+    def __init__(self, left_parent: Node, right_parent: Node) -> None:
+        super().__init__(parent=left_parent)
+        self.right_parent = right_parent
+
+    @property
+    def is_barrier(self) -> bool:
+        return True
+
+    def evaluate(self) -> Iterator[Dict[str, Any]]:
+        assert self.parent is not None
+        # Материализуем правую сторону
+        right_items: List[Any] = list(self.right_parent.evaluate())
+
+        for l_item in self.parent.evaluate():
+            for r_item in right_items:
+                merged: Dict[str, Any] = {}
+                if isinstance(l_item, dict):
+                    merged.update(l_item)
+                else:
+                    merged["left"] = l_item
+
+                if isinstance(r_item, dict):
+                    merged.update(r_item)
+                else:
+                    merged["right"] = r_item
+                yield merged
+
+    def explain_step(self) -> str:
+        return "CROSS JOIN (barrier=True)"

@@ -7,7 +7,7 @@ from fluxmonad.plan.barriers import (
 )
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
-from fluxmonad.plan.joins import JoinNode
+from fluxmonad.plan.joins import JoinNode, CrossJoinNode
 from fluxmonad.plan.sets import UnionNode, IntersectionNode, DifferenceNode
 from fluxmonad.plan.transforms import (
     BindNode,
@@ -39,6 +39,7 @@ __all__ = [
     "DistinctNode",
     "ExtendNode",
     "JoinNode",
+    "CrossJoinNode",
     "UnionNode",
     "IntersectionNode",
     "DifferenceNode",
