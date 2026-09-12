@@ -1,4 +1,10 @@
-from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
+from fluxmonad.plan.barriers import (
+    DistinctNode, 
+    Group, 
+    GroupByNode, 
+    SortNode,
+    ReverseNode
+)
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.joins import JoinNode
@@ -12,7 +18,9 @@ from fluxmonad.plan.transforms import (
     SkipNode,
     TakeNode,
     ExtendNode,
-    RenameNode
+    RenameNode,
+    ZipNode,
+    TapNode
 )
 
 __all__ = [
@@ -34,5 +42,8 @@ __all__ = [
     "UnionNode",
     "IntersectionNode",
     "DifferenceNode",
-    "RenameNode"
+    "RenameNode",
+    "ReverseNode",
+    "ZipNode",
+    "TapNode"
 ]

@@ -1,5 +1,5 @@
 import itertools
-from typing import Any, Callable, Dict, Iterator
+from typing import Any, Callable, Dict, Iterator, Tuple
 
 from typing import Any, Callable, Iterator, Sequence, Union
 from fluxmonad.accessors import project_exclude, project_select
@@ -251,3 +251,46 @@ class RenameNode(Node):
     def explain_step(self) -> str:
         pairs = ", ".join(f"{k}->{v}" for k, v in self.mapping.items())
         return f"RENAME: {pairs}"
+
+class ZipNode(Node):
+    """Стриминговое спаривание элементов текущего потока с другим потоком."""
+
+    def __init__(self, parent: Node, other: Node) -> None:
+        super().__init__(parent=parent)
+        self.other = other
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Tuple[Any, Any]]:
+        assert self.parent is not None
+        return zip(self.parent.evaluate(), self.other.evaluate())
+
+    def explain_step(self) -> str:
+        return "ZIP"
+
+
+class TapNode(Node):
+    """
+    Стриминговое выполнение побочного действия (логирование/отладка)
+    над каждым элементом без изменения данных потока.
+    """
+
+    def __init__(self, parent: Node, action: Callable[[Any], None]) -> None:
+        super().__init__(parent=parent)
+        self.action = action
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            self.action(item)
+            yield item
+
+    def explain_step(self) -> str:
+        name = getattr(self.action, "__name__", str(self.action))
+        return f"TAP: {name}"

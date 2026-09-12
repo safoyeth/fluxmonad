@@ -166,7 +166,6 @@ class Group(Generic[T]):
 
         return result
 
-
 class GroupByNode(Node):
     """
     Барьерный узел группировки элементов по ключу.
@@ -253,3 +252,25 @@ class DistinctNode(Node):
     def explain_step(self) -> str:
         key_name = getattr(self.key_selector, "__name__", str(self.key_selector)) if self.key_selector else "identity"
         return f"DISTINCT: {key_name} (barrier=True)"
+
+class ReverseNode(Node):
+    """
+    Барьерный узел инверсии порядка элементов потока.
+    Полностью материализует входной поток перед разворотом.
+    """
+
+    def __init__(self, parent: Node) -> None:
+        super().__init__(parent=parent)
+
+    @property
+    def is_barrier(self) -> bool:
+        return True
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        materialized = list(self.parent.evaluate())
+        materialized.reverse()
+        return iter(materialized)
+
+    def explain_step(self) -> str:
+        return "REVERSE (barrier=True)"

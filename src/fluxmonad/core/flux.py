@@ -3,13 +3,13 @@ from __future__ import annotations
 import collections
 import functools
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from fluxmonad.accessors import get_value
 from fluxmonad.expressions.base import Expression
 from fluxmonad.expressions.parser import build_expression
 from fluxmonad.diagnostics.explainer import format_explain
-from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode
+from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode, ReverseNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.joins import JoinNode
@@ -24,7 +24,9 @@ from fluxmonad.plan.transforms import (
     SkipNode,
     TakeNode,
     ExtendNode,
-    RenameNode
+    RenameNode,
+    ZipNode,
+    TapNode
 )
 from fluxmonad.core.types import alias_for
 
@@ -586,3 +588,45 @@ class Flux(Generic[T]):
     @alias_for(rename)
     def renameFields(self, **mapping: str) -> Flux[Dict[str, Any]]:
         return self.rename(**mapping)
+
+    # --- Разворот потока ---
+
+    def reverse(self) -> Flux[T]:
+        """Инвертирует порядок элементов потока (барьерная операция)."""
+        return Flux[T](ReverseNode(self._node))
+
+    # --- Инспекция / Logging ---
+
+    def tap(self, action: Callable[[T], None]) -> Flux[T]:
+        """
+        Выполняет действие над каждым элементом потока без изменения данных.
+        Идеально подходит для логирования шагов пайплайна.
+        """
+        return Flux[T](TapNode(self._node, action))
+
+    @alias_for(tap)
+    def peek(self, action: Callable[[T], None]) -> Flux[T]:
+        return self.tap(action)
+
+    # --- Спаривание потоков ---
+
+    def zip(self, other: Flux[R]) -> Flux[Tuple[T, R]]:
+        """Потоково объединяет элементы текущего Flux с элементами другого Flux в кортежи."""
+        return Flux[Tuple[T, R]](ZipNode(self._node, other._node))
+
+    # --- Разделение потока ---
+
+    def partition(
+        self,
+        predicate: Union[None, Callable[[T], bool], Expression] = None,
+        **kwargs: Any,
+    ) -> Tuple[Flux[T], Flux[T]]:
+        """
+        Разделяет поток на два Flux: (matching_flux, not_matching_flux).
+        """
+        expr = build_expression(predicate, **kwargs)
+        # Материализуем источник, чтобы оба потока могли независимо итерироваться
+        mat = self.materialize()
+        matching = mat.when(expr)
+        not_matching = mat.when(~expr)
+        return matching, not_matching
