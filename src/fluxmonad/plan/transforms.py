@@ -1,6 +1,6 @@
 import itertools
 import copy
-from typing import Any, Callable, Dict, Iterator, Tuple, Deque, List, Sequence, Union, Optional
+from typing import Any, Callable, Dict, Iterator, Tuple, Deque, List, Sequence, Union, Optional, Type
 
 from fluxmonad.accessors import project_exclude, project_select
 from fluxmonad.accessors.resolver import MISSING, get_value
@@ -453,3 +453,80 @@ class BranchNode(Node):
 
     def explain_step(self) -> str:
         return "BRANCH (conditional transform)"
+
+class CatchNode(Node):
+    """
+    Перехватывает исключения при вычислении элементов.
+    Позволяет подставить fallback-значение или пропустить сбойный элемент.
+    """
+
+    def __init__(
+        self,
+        parent: Node,
+        handler: Optional[Callable[[Exception, Any], Any]] = None,
+        exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    ) -> None:
+        super().__init__(parent=parent)
+        self.handler = handler
+        self.exceptions = exceptions
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+
+        # Если родитель — MapNode, применяем func с защитой каждого вызова,
+        # чтобы ошибка не разрушала генератор итерации
+        if isinstance(self.parent, MapNode):
+            upstream = self.parent.parent.evaluate() if self.parent.parent else iter([])
+            func = self.parent.func
+            for raw_item in upstream:
+                try:
+                    yield func(raw_item)
+                except self.exceptions as exc:
+                    if self.handler is not None:
+                        fallback = self.handler(exc, raw_item)
+                        if fallback is not None:
+                            yield fallback
+            return
+
+        # Общий случай для остальных типов узлов
+        iterator = iter(self.parent.evaluate())
+        while True:
+            try:
+                item = next(iterator)
+            except StopIteration:
+                break
+            except self.exceptions as exc:
+                if self.handler is not None:
+                    fallback = self.handler(exc, None)
+                    if fallback is not None:
+                        yield fallback
+                continue
+            yield item
+
+    def explain_step(self) -> str:
+        exc_names = ", ".join(e.__name__ for e in self.exceptions)
+        return f"CATCH: ({exc_names})"
+
+
+class CompactNode(Node):
+    """Стриминговое отсеивание None значений."""
+
+    def __init__(self, parent: Node) -> None:
+        super().__init__(parent=parent)
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            if item is not None:
+                yield item
+
+    def explain_step(self) -> str:
+        return "COMPACT"

@@ -27,6 +27,8 @@ from fluxmonad.plan.transforms import (
     FlattenNode,
     FillNullNode,
     BranchNode,
+    CatchNode,
+    CompactNode
 )
 from fluxmonad.plan.analytics import (
     EnumerateNode, 

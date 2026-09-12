@@ -4,7 +4,7 @@ import collections
 import functools
 import statistics
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, Union, Type
 
 from fluxmonad.accessors import get_value
 from fluxmonad.expressions.base import Expression
@@ -33,6 +33,8 @@ from fluxmonad.plan.transforms import (
     FlattenNode,
     FillNullNode,
     BranchNode,
+    CatchNode,
+    CompactNode
 )
 from fluxmonad.plan.analytics import CumulativeSumNode, EnumerateNode, LagLeadNode
 from fluxmonad.core.types import alias_for
@@ -934,3 +936,47 @@ class Flux(Generic[T]):
         """Случайная выборка n элементов методом резервуарного сэмплинга."""
         from fluxmonad.plan.barriers import SampleNode
         return Flux[T](SampleNode(self._node, n, seed=seed))
+
+    # --- Отказоустойчивость ---
+
+    def catch(
+        self,
+        handler: Optional[Callable[[Exception, Any], Any]] = None,
+        exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    ) -> Flux[T]:
+        """
+        Перехватывает исключения в потоке.
+        Если handler возвращает значение — оно подставляется в поток.
+        Если handler=None — сбойный элемент просто отбрасывается.
+        """
+        return Flux[T](CatchNode(self._node, handler=handler, exceptions=exceptions))
+
+    @alias_for(catch)
+    def on_error(
+        self,
+        handler: Optional[Callable[[Exception, Any], Any]] = None,
+        exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    ) -> Flux[T]:
+        return self.catch(handler=handler, exceptions=exceptions)
+
+    def compact(self) -> Flux[T]:
+        """Удаляет все элементы None из потока."""
+        return Flux[T](CompactNode(self._node))
+
+    # --- Async Support ---
+
+    async def __aiter__(self):
+        """Асинхронный генератор для обхода пайплайна через async for."""
+        for item in self:
+            yield item
+
+    async def collect_async(self) -> List[T]:
+        """Асинхронно собирает результаты потока в список."""
+        res: List[T] = []
+        async for item in self:
+            res.append(item)
+        return res
+
+    @alias_for(collect_async)
+    async def toListAsync(self) -> List[T]:
+        return await self.collect_async()
