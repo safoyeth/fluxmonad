@@ -14,6 +14,7 @@ from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.joins import JoinNode
 from fluxmonad.plan.optimizer import PlanOptimizer
+from fluxmonad.plan.sets import DifferenceNode, IntersectionNode, UnionNode
 from fluxmonad.plan.transforms import (
     BindNode,
     ExcludeNode,
@@ -22,7 +23,8 @@ from fluxmonad.plan.transforms import (
     SelectNode,
     SkipNode,
     TakeNode,
-    ExtendNode
+    ExtendNode,
+    RenameNode
 )
 from fluxmonad.core.types import alias_for
 
@@ -343,6 +345,29 @@ class Flux(Generic[T]):
         optimized_node = PlanOptimizer.optimize(self._node)
         return Flux[T](optimized_node)
 
+    # --- Операции со множествами ---
+
+    def union(self, other: Flux[T]) -> Flux[T]:
+        """Объединяет текущий поток с другим потоком."""
+        return Flux[T](UnionNode(self._node, other._node))
+
+    def intersection(self, other: Flux[T]) -> Flux[T]:
+        """Возвращает пересечение элементов двух потоков."""
+        return Flux[T](IntersectionNode(self._node, other._node))
+
+    def difference(self, other: Flux[T]) -> Flux[T]:
+        """Исключает из текущего потока элементы другого потока."""
+        return Flux[T](DifferenceNode(self._node, other._node))
+
+    # --- Переименование полей ---
+
+    def rename(self, **mapping: str) -> Flux[Dict[str, Any]]:
+        """
+        Переименовывает поля в потоке.
+        Пример: .rename(old_name='new_name', user_id='id')
+        """
+        return Flux[Dict[str, Any]](RenameNode(self._node, mapping))
+
     # --- Фабричные методы создания (Data Ingestion) ---
 
     @classmethod
@@ -553,3 +578,11 @@ class Flux(Generic[T]):
     @alias_for(from_file)
     def fromFile(cls, filepath: Union[str, Any]) -> Flux[Any]:
         return cls.from_file(filepath)
+
+    @alias_for(rename)
+    def rename_fields(self, **mapping: str) -> Flux[Dict[str, Any]]:
+        return self.rename(**mapping)
+
+    @alias_for(rename)
+    def renameFields(self, **mapping: str) -> Flux[Dict[str, Any]]:
+        return self.rename(**mapping)

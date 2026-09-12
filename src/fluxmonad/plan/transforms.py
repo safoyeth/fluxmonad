@@ -1,5 +1,5 @@
 import itertools
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Dict, Iterator
 
 from typing import Any, Callable, Iterator, Sequence, Union
 from fluxmonad.accessors import project_exclude, project_select
@@ -217,3 +217,37 @@ class ExtendNode(Node):
 
     def explain_step(self) -> str:
         return f"EXTEND: {self.field_name}"
+
+class RenameNode(Node):
+    """Стриминговое переименование полей в словарях или объектах."""
+
+    def __init__(self, parent: Node, mapping: Dict[str, str]) -> None:
+        super().__init__(parent=parent)
+        self.mapping = mapping
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            if isinstance(item, dict):
+                new_item = dict(item)
+                for old_key, new_key in self.mapping.items():
+                    if old_key in new_item:
+                        new_item[new_key] = new_item.pop(old_key)
+                yield new_item
+            else:
+                import copy
+                new_obj = copy.copy(item)
+                for old_key, new_key in self.mapping.items():
+                    if hasattr(new_obj, old_key):
+                        val = getattr(new_obj, old_key)
+                        delattr(new_obj, old_key)
+                        setattr(new_obj, new_key, val)
+                yield new_obj
+
+    def explain_step(self) -> str:
+        pairs = ", ".join(f"{k}->{v}" for k, v in self.mapping.items())
+        return f"RENAME: {pairs}"

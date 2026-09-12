@@ -1,6 +1,7 @@
 from typing import (
     Any, 
-    Callable, 
+    Callable,
+    Dict, 
     Iterator, 
     List, 
     Optional, 
@@ -131,6 +132,39 @@ class Group(Generic[T]):
 
     def __repr__(self) -> str:
         return f"Group(key={repr(self.key)}, count={len(self.values)})"
+
+    def aggregate(self, **aggregations: Union[str, Callable[["Flux[T]"], Any]]) -> Dict[str, Any]:
+        """
+        Вычисляет набор агрегатных показателей над элементами группы.
+        Пример: group.aggregate(total_salary="sum:salary", avg_age="avg:age", count="count")
+        """
+        result: Dict[str, Any] = {"key": self.key}
+        sub_flux = self.flux
+
+        for target_name, agg_spec in aggregations.items():
+            if callable(agg_spec):
+                result[target_name] = agg_spec(sub_flux)
+            elif isinstance(agg_spec, str):
+                tokens = agg_spec.split(":")
+                op = tokens[0].lower()
+                field = tokens[1] if len(tokens) > 1 else None
+
+                if op == "count":
+                    result[target_name] = sub_flux.count()
+                elif op == "sum":
+                    result[target_name] = sub_flux.sum(field)
+                elif op in ("avg", "average"):
+                    result[target_name] = sub_flux.average(field)
+                elif op == "min":
+                    result[target_name] = sub_flux.min(field)
+                elif op == "max":
+                    result[target_name] = sub_flux.max(field)
+                else:
+                    raise ValueError(f"Неизвестная операция агрегации: {op}")
+            else:
+                raise TypeError(f"Спецификация агрегации должна быть строкой или callable: {agg_spec}")
+
+        return result
 
 
 class GroupByNode(Node):
