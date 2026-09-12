@@ -35,6 +35,7 @@ from fluxmonad.plan.analytics import (
     CumulativeSumNode, 
     LagLeadNode
 )
+from fluxmonad.plan.concurrency import ParallelMapNode 
 
 __all__ = [
     "Node",
@@ -69,4 +70,5 @@ __all__ = [
     "FillNullNode",
     "BranchNode",
     "SampleNode",
+    "ParallelMapNode",
 ]

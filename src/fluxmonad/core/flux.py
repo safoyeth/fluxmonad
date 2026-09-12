@@ -45,6 +45,8 @@ from fluxmonad.sources.writers import (
     write_toml,
     write_yaml,
 )
+from fluxmonad.diagnostics.profiler import ProfileResult, profile_pipeline
+from fluxmonad.plan.concurrency import ParallelMapNode
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -980,3 +982,55 @@ class Flux(Generic[T]):
     @alias_for(collect_async)
     async def toListAsync(self) -> List[T]:
         return await self.collect_async()
+
+    # --- Конкурентность и параллелизм ---
+
+    def parallel_map(
+        self,
+        func: Callable[[T], R],
+        workers: Optional[int] = None,
+        chunksize: int = 1,
+        backend: str = "thread",
+    ) -> Flux[R]:
+        """
+        Параллельное вычисление функции над потоком.
+        backend: 'thread' (рекомендуется для I/O) или 'process' (для тяжелых CPU задач).
+        """
+        return Flux[R](
+            ParallelMapNode(
+                parent=self._node,
+                func=func,
+                workers=workers,
+                chunksize=chunksize,
+                backend=backend,
+            )
+        )
+
+    @alias_for(parallel_map)
+    def parallelMap(
+        self,
+        func: Callable[[T], R],
+        workers: Optional[int] = None,
+        chunksize: int = 1,
+        backend: str = "thread",
+    ) -> Flux[R]:
+        return self.parallel_map(func, workers=workers, chunksize=chunksize, backend=backend)
+
+    @alias_for(parallel_map)
+    def pmap(
+        self,
+        func: Callable[[T], R],
+        workers: Optional[int] = None,
+        chunksize: int = 1,
+        backend: str = "thread",
+    ) -> Flux[R]:
+        return self.parallel_map(func, workers=workers, chunksize=chunksize, backend=backend)
+
+    # --- Профилирование и телеметрия ---
+
+    def profile(self) -> ProfileResult:
+        """
+        Выполняет пайплайн с замером времени и объема данных на каждом шаге.
+        Возвращает ProfileResult со сводкой и финальными данными.
+        """
+        return profile_pipeline(self._node)
