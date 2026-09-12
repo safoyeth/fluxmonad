@@ -1,8 +1,7 @@
 import itertools
-import collections
-from typing import Any, Callable, Dict, Iterator, Tuple, Deque, List
+import copy
+from typing import Any, Callable, Dict, Iterator, Tuple, Deque, List, Sequence, Union, Optional
 
-from typing import Any, Callable, Iterator, Sequence, Union
 from fluxmonad.accessors import project_exclude, project_select
 from fluxmonad.accessors.resolver import MISSING, get_value
 from fluxmonad.expressions.base import Expression
@@ -349,3 +348,108 @@ class WindowNode(Node):
 
     def explain_step(self) -> str:
         return f"WINDOW: size={self.size}, step={self.step}"
+
+class FlattenNode(Node):
+    """Разворачивание вложенных коллекций (или списков внутри указанного поля)."""
+
+    def __init__(self, parent: Node, field: Optional[str] = None) -> None:
+        super().__init__(parent=parent)
+        self.field = field
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            if self.field is None:
+                if isinstance(item, (list, tuple, set)):
+                    yield from item
+                else:
+                    yield item
+            else:
+                raw_val = get_value(item, self.field, default=[])
+                if isinstance(raw_val, (list, tuple, set)):
+                    for sub_val in raw_val:
+                        if isinstance(item, dict):
+                            new_item = dict(item)
+                            new_item[self.field] = sub_val
+                            yield new_item
+                        else:
+                            new_obj = copy.copy(item)
+                            setattr(new_obj, self.field, sub_val)
+                            yield new_obj
+                else:
+                    yield item
+
+    def explain_step(self) -> str:
+        return f"FLATTEN: {self.field or 'root'}"
+
+
+class FillNullNode(Node):
+    """Замена None или отсутствующих полей значениями по умолчанию."""
+
+    def __init__(self, parent: Node, defaults: Dict[str, Any]) -> None:
+        super().__init__(parent=parent)
+        self.defaults = defaults
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            if isinstance(item, dict):
+                new_item = dict(item)
+                for field, default_val in self.defaults.items():
+                    if new_item.get(field) is None:
+                        new_item[field] = default_val
+                yield new_item
+            else:
+                new_obj = copy.copy(item)
+                for field, default_val in self.defaults.items():
+                    if getattr(new_obj, field, None) is None:
+                        setattr(new_obj, field, default_val)
+                yield new_obj
+
+    def explain_step(self) -> str:
+        keys = ", ".join(f"{k}={v}" for k, v in self.defaults.items())
+        return f"FILL_NULL: {keys}"
+
+
+class BranchNode(Node):
+    """
+    Применяет if_true(item), если выполняется predicate(item),
+    иначе применяет if_false(item) (если передано).
+    """
+
+    def __init__(
+        self,
+        parent: Node,
+        predicate: Callable[[Any], bool],
+        if_true: Callable[[Any], Any],
+        if_false: Optional[Callable[[Any], Any]] = None,
+    ) -> None:
+        super().__init__(parent=parent)
+        self.predicate = predicate
+        self.if_true = if_true
+        self.if_false = if_false
+
+    @property
+    def is_barrier(self) -> bool:
+        return False
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        for item in self.parent.evaluate():
+            if self.predicate(item):
+                yield self.if_true(item)
+            elif self.if_false is not None:
+                yield self.if_false(item)
+            else:
+                yield item
+
+    def explain_step(self) -> str:
+        return "BRANCH (conditional transform)"

@@ -1,3 +1,5 @@
+import random
+
 from typing import (
     Any, 
     Callable,
@@ -274,3 +276,38 @@ class ReverseNode(Node):
 
     def explain_step(self) -> str:
         return "REVERSE (barrier=True)"
+    
+class SampleNode(Node):
+    """
+    Потоковая выборка n случайных элементов (Reservoir Sampling).
+    Требует O(n) памяти вне зависимости от общего размера потока.
+    """
+
+    def __init__(self, parent: Node, n: int, seed: Optional[int] = None) -> None:
+        super().__init__(parent=parent)
+        if n <= 0:
+            raise ValueError("Параметр n должен быть больше 0")
+        self.n = n
+        self.seed = seed
+
+    @property
+    def is_barrier(self) -> bool:
+        return True
+
+    def evaluate(self) -> Iterator[Any]:
+        assert self.parent is not None
+        rng = random.Random(self.seed)
+        reservoir: List[Any] = []
+
+        for idx, item in enumerate(self.parent.evaluate()):
+            if idx < self.n:
+                reservoir.append(item)
+            else:
+                j = rng.randint(0, idx)
+                if j < self.n:
+                    reservoir[j] = item
+
+        return iter(reservoir)
+
+    def explain_step(self) -> str:
+        return f"SAMPLE: {self.n} items (barrier=True)"

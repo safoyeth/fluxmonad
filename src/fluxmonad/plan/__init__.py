@@ -3,7 +3,8 @@ from fluxmonad.plan.barriers import (
     Group, 
     GroupByNode, 
     SortNode,
-    ReverseNode
+    ReverseNode,
+    SampleNode,
 )
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
@@ -22,7 +23,10 @@ from fluxmonad.plan.transforms import (
     ZipNode,
     TapNode,
     ChunkNode,
-    WindowNode
+    WindowNode,
+    FlattenNode,
+    FillNullNode,
+    BranchNode,
 )
 from fluxmonad.plan.analytics import (
     EnumerateNode, 
@@ -58,5 +62,9 @@ __all__ = [
     "WindowNode",
     "EnumerateNode",
     "CumulativeSumNode",
-    "LagLeadNode"
+    "LagLeadNode",
+    "FlattenNode",
+    "FillNullNode",
+    "BranchNode",
+    "SampleNode",
 ]

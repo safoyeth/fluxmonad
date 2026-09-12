@@ -10,7 +10,7 @@ from fluxmonad.accessors import get_value
 from fluxmonad.expressions.base import Expression
 from fluxmonad.expressions.parser import build_expression
 from fluxmonad.diagnostics.explainer import format_explain
-from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode, ReverseNode
+from fluxmonad.plan.barriers import DistinctNode, Group, GroupByNode, SortNode, ReverseNode, SampleNode
 from fluxmonad.plan.node import Node
 from fluxmonad.plan.source import SourceNode
 from fluxmonad.plan.joins import JoinNode, CrossJoinNode
@@ -29,7 +29,10 @@ from fluxmonad.plan.transforms import (
     ZipNode,
     TapNode,
     ChunkNode,
-    WindowNode
+    WindowNode,
+    FlattenNode,
+    FillNullNode,
+    BranchNode,
 )
 from fluxmonad.plan.analytics import CumulativeSumNode, EnumerateNode, LagLeadNode
 from fluxmonad.core.types import alias_for
@@ -890,3 +893,44 @@ class Flux(Generic[T]):
     @alias_for(std_dev)
     def stdDev(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
         return self.std_dev(selector)
+
+    # --- Выравнивание структур ---
+
+    def flatten(self, field: Optional[str] = None) -> Flux[Any]:
+        """Разворачивает вложенные списки в корень потока или по указанному полю."""
+        from fluxmonad.plan.transforms import FlattenNode
+        return Flux[Any](FlattenNode(self._node, field))
+
+    # --- Обработка Null / Missing ---
+
+    def fill_null(self, **defaults: Any) -> Flux[T]:
+        """Заменяет None значения указанных полей на заданные по умолчанию."""
+        from fluxmonad.plan.transforms import FillNullNode
+        return Flux[T](FillNullNode(self._node, defaults))
+
+    @alias_for(fill_null)
+    def fillNull(self, **defaults: Any) -> Flux[T]:
+        return self.fill_null(**defaults)
+
+    @alias_for(fill_null)
+    def fillna(self, **defaults: Any) -> Flux[T]:
+        return self.fill_null(**defaults)
+
+    # --- Условное ветвление ---
+
+    def branch(
+        self,
+        predicate: Callable[[T], bool],
+        if_true: Callable[[T], Any],
+        if_false: Optional[Callable[[T], Any]] = None,
+    ) -> Flux[Any]:
+        """Условная трансформация элементов по предикату."""
+        from fluxmonad.plan.transforms import BranchNode
+        return Flux[Any](BranchNode(self._node, predicate, if_true, if_false))
+
+    # --- Сэмплинг ---
+
+    def sample(self, n: int, seed: Optional[int] = None) -> Flux[T]:
+        """Случайная выборка n элементов методом резервуарного сэмплинга."""
+        from fluxmonad.plan.barriers import SampleNode
+        return Flux[T](SampleNode(self._node, n, seed=seed))
