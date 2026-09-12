@@ -246,3 +246,12 @@ class Flux(Generic[T]):
         if callable(selector):
             return max(self, key=selector)
         return max(self, key=lambda x: get_value(x, selector))
+
+    def materialize(self) -> Flux[T]:
+        """
+        Материализует текущий пайплайн и возвращает новый Flux,
+        основанный на сохранённом неизменяемом кортеже элементов.
+        Позволяет безопасно многократно итерироваться по одноразовым генераторам.
+        """
+        cached_data = tuple(self)
+        return Flux[T](cached_data)
