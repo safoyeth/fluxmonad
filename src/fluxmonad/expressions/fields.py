@@ -10,6 +10,12 @@ class BinaryOp(Expression):
         self.field_path = field_path
         self.value = value
         self.op_name = op_name
+        self._is_simple = isinstance(field_path, str) and "." not in field_path
+
+    def _get_value(self, obj: Any) -> Any:
+        if self._is_simple and isinstance(obj, dict):
+            return obj.get(self.field_path, MISSING)
+        return get_value(obj, self.field_path, default=MISSING)
 
     @property
     def referenced_fields(self) -> Set[str]:
@@ -39,7 +45,7 @@ class Eq(BinaryOp):
         super().__init__(field_path, value, "==")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         return False if val is MISSING else bool(val == self.value)
 
 
@@ -48,7 +54,7 @@ class Ne(BinaryOp):
         super().__init__(field_path, value, "!=")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         return False if val is MISSING else bool(val != self.value)
 
 
@@ -57,7 +63,7 @@ class Gt(BinaryOp):
         super().__init__(field_path, value, ">")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING or val is None:
             return False
         try:
@@ -71,7 +77,7 @@ class Gte(BinaryOp):
         super().__init__(field_path, value, ">=")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING or val is None:
             return False
         try:
@@ -85,7 +91,7 @@ class Lt(BinaryOp):
         super().__init__(field_path, value, "<")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING or val is None:
             return False
         try:
@@ -99,7 +105,7 @@ class Lte(BinaryOp):
         super().__init__(field_path, value, "<=")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING or val is None:
             return False
         try:
@@ -113,7 +119,7 @@ class In(BinaryOp):
         super().__init__(field_path, value, "IN")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING:
             return False
         try:
@@ -127,7 +133,7 @@ class Contains(BinaryOp):
         super().__init__(field_path, value, "CONTAINS")
 
     def evaluate(self, obj: Any) -> bool:
-        val = get_value(obj, self.field_path, default=MISSING)
+        val = self._get_value(obj)
         if val is MISSING or val is None:
             return False
         try:

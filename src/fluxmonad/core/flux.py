@@ -163,7 +163,7 @@ class Flux(Generic[T]):
         return Flux[T](list(buffer))
 
     # --- Терминальные операции ---
-
+    
     def collect(self) -> List[T]:
         return list(self)
 
@@ -231,7 +231,8 @@ class Flux(Generic[T]):
         """
         Барьерная группировка элементов.
         Возвращает Flux[Group], элементы которого содержат .key и .flux (подпоток элементов).
-        """  
+        """
+        
         return Flux(GroupByNode(self._node, key_selector))
 
     # --- Устранение дубликатов ---
@@ -247,22 +248,34 @@ class Flux(Generic[T]):
 
     def sum(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> Union[int, float]:
         """Суммирует элементы или значения полей."""
+        if selector is None:
+            import builtins
+            return builtins.sum(cast(Iterable[Union[int, float]], self))
+
         total: Union[int, float] = 0
+        getter: Callable[[Any], Any] = (lambda x: get_value(x, selector)) if isinstance(selector, str) else selector
         for item in self:
-            val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
+            val = getter(item)
             if val is not None:
-                total += cast(Union[int, float], val)
+                total += val
         return total
 
     def average(self, selector: Optional[Union[str, Callable[[T], Any]]] = None) -> float:
         """Вычисляет среднее арифметическое элементов потока."""
         total: Union[int, float] = 0
         count = 0
-        for item in self:
-            val = get_value(item, selector) if isinstance(selector, str) else (selector(item) if callable(selector) else item)
-            if val is not None:
-                total += cast(Union[int, float], val)
-                count += 1
+        if selector is None:
+            for item in self:
+                if item is not None:
+                    total += item  # type: ignore[operator]
+                    count += 1
+        else:
+            getter: Callable[[Any], Any] = (lambda x: get_value(x, selector)) if isinstance(selector, str) else selector
+            for item in self:
+                val = getter(item)
+                if val is not None:
+                    total += val
+                    count += 1
         if count == 0:
             raise ValueError("Невозможно вычислить average для пустого потока")
         return total / count

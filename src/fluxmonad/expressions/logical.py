@@ -13,7 +13,10 @@ class And(Expression):
         return res
 
     def evaluate(self, item: Any) -> bool:
-        return all(expr.evaluate(item) for expr in self.expressions)
+        for expr in self.expressions:
+            if not expr.evaluate(item):
+                return False
+        return True
 
     def explain(self) -> str:
         inner = " AND ".join(e.explain() if hasattr(e, "explain") else str(e) for e in self.expressions)
@@ -32,7 +35,10 @@ class Or(Expression):
         return res
 
     def evaluate(self, item: Any) -> bool:
-        return any(expr.evaluate(item) for expr in self.expressions)
+        for expr in self.expressions:
+            if expr.evaluate(item):
+                return True
+        return False
 
     def explain(self) -> str:
         inner = " OR ".join(e.explain() if hasattr(e, "explain") else str(e) for e in self.expressions)

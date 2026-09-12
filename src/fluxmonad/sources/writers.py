@@ -93,7 +93,7 @@ def write_toml(
         dump_fn = tomli_w.dump
     except ImportError:
         try:
-            import rtoml
+            import rtoml  # pyright: ignore[reportMissingImports]
             dump_fn = None
         except ImportError:
             raise ImportError("Для записи TOML необходимо установить tomli-w: pip install tomli-w")
@@ -109,7 +109,7 @@ def write_toml(
         with open(path, mode="wb") as f:
             dump_fn(payload, f)
     else:
-        import rtoml
+        import rtoml  # pyright: ignore[reportMissingImports]
         rtoml.dump(payload, path)
 
 

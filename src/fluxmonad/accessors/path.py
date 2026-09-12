@@ -1,3 +1,4 @@
+import functools
 from dataclasses import dataclass
 from typing import List
 
@@ -8,6 +9,7 @@ class PathSegment:
     is_deep: bool = False  # True, если сегменту предшествовал маркер '..'
 
 
+@functools.lru_cache(maxsize=1024)
 def parse_path(path: str) -> List[PathSegment]:
     """
     Разбирает строковый путь на сегменты с поддержкой маркера глубокого поиска '..'.

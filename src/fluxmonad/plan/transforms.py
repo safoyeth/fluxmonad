@@ -23,7 +23,7 @@ class MapNode(Node):
 
     def evaluate(self) -> Iterator[Any]:
         assert self.parent is not None
-        return (self.func(item) for item in self.parent.evaluate())
+        return map(self.func, self.parent.evaluate())
 
     def explain_step(self) -> str:
         return f"MAP: {getattr(self.func, '__name__', str(self.func))}"
@@ -45,9 +45,7 @@ class FilterNode(Node):
 
     def evaluate(self) -> Iterator[Any]:
         assert self.parent is not None
-        for item in self.parent.evaluate():
-            if self.expr.evaluate(item):
-                yield item
+        return filter(self.expr.evaluate, self.parent.evaluate())
 
     def explain_step(self) -> str:
         return f"FILTER: {self.expr.explain()}"
@@ -206,17 +204,20 @@ class ExtendNode(Node):
 
     def evaluate(self) -> Iterator[Any]:
         assert self.parent is not None
+        rule = self.rule
+        field_name = self.field_name
+        compute = rule if callable(rule) else self._compute_value
         for item in self.parent.evaluate():
-            computed = self._compute_value(item)
+            computed = compute(item)
             if isinstance(item, dict):
-                new_item = dict(item)
-                new_item[self.field_name] = computed
+                new_item = item.copy()
+                new_item[field_name] = computed
                 yield new_item
             else:
                 # Если передан пользовательский объект — обогащаем его поверхностную копию
                 import copy
                 new_obj = copy.copy(item)
-                setattr(new_obj, self.field_name, computed)
+                setattr(new_obj, field_name, computed)
                 yield new_obj
 
     def explain_step(self) -> str:

@@ -74,6 +74,21 @@ def get_value(obj: Any, path: str, default: Any = MISSING) -> Any:
     Универсально извлекает значение из объекта по строковому пути.
     Поддерживает явный синтаксис глубокого поиска: '..key' или 'path..key'.
     """
+    if obj is None:
+        return default
+
+    # Fast-path для простых ключей без вложенности и глубокого поиска
+    if "." not in path:
+        if isinstance(obj, dict):
+            return obj.get(path, default)
+        if isinstance(obj, Mapping):
+            if path in obj:
+                return obj[path]
+            if path.isdigit() and int(path) in obj:
+                return obj[int(path)]
+        elif hasattr(obj, path):
+            return getattr(obj, path)
+
     segments = parse_path(path)
     current = obj
 
@@ -91,4 +106,4 @@ def get_value(obj: Any, path: str, default: Any = MISSING) -> Any:
 
 def has_path(obj: Any, path: str) -> bool:
     """Проверяет существование пути в объекте."""
-    return get_value(obj, path, default=MISSING) is not MISSING
+    return bool(get_value(obj, path, default=MISSING) is not MISSING)
